@@ -1,0 +1,16 @@
+# Configurações confidenciais (Banco de dados, APIs, WhatsApp)
+crm/config.php
+crm/config.local.php
+crm/data/settings.json
+.env
+.env.*
+!.env.example
+
+# Arquivos de log e temporários do CRM
+crm/data/*.log
+crm/data/*.lock
+crm/data/security-*.json
+
+# Arquivos do sistema operacional
+.DS_Store
+Thumbs.db

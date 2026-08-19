@@ -1,0 +1,18 @@
+{
+    "whatsapp_provider": "pilot_status",
+    "meta_whatsapp_graph_version": "20.0",
+    "meta_whatsapp_phone_number_id": "",
+    "meta_whatsapp_business_account_id": "",
+    "meta_whatsapp_verify_token": "",
+    "meta_whatsapp_coex_enabled": false,
+    "whatsapp_after_hours_enabled": false,
+    "whatsapp_business_start_time": "08:00:00",
+    "whatsapp_business_end_time": "18:00:00",
+    "whatsapp_business_saturday_enabled": false,
+    "whatsapp_business_sunday_enabled": false,
+    "whatsapp_after_hours_message": "Olá! Nosso atendimento funciona em horário comercial. Recebemos sua mensagem e retornaremos assim que possível.",
+    "pilot_status_base_url": "https://pilotstatus.com.br/v1",
+    "pilot_status_webhook_secret": "",
+    "meta_whatsapp_access_token": "",
+    "pilot_status_api_key": ""
+}

@@ -1,0 +1,14 @@
+Options -Indexes
+
+# Pilot Status downloads the media from this folder before uploading it to
+# WhatsApp. Some hosting configurations serve unknown extensions as
+# application/octet-stream, which Meta rejects for audio messages.
+AddType audio/mp4 .mp4 .m4a
+AddType audio/ogg .ogg .opus
+AddType audio/mpeg .mp3
+AddType audio/aac .aac
+AddType audio/amr .amr
+
+<FilesMatch "\.(php|phtml|phar|cgi|pl|py|sh)$">
+    Require all denied
+</FilesMatch>

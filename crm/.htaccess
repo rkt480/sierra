@@ -1,0 +1,25 @@
+Options -Indexes
+
+AddType application/manifest+json .webmanifest
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Keep local XAMPP/testing hosts available over HTTP, but force the CRM to
+  # HTTPS on public hosts. The forwarded-proto check avoids redirect loops
+  # when TLS is terminated by a reverse proxy.
+  RewriteCond %{HTTPS} !=on
+  RewriteCond %{HTTP:X-Forwarded-Proto} !^https$ [NC]
+  RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1|\[::1\])(:[0-9]+)?$ [NC]
+  RewriteCond %{HTTP_HOST} !\.local$ [NC]
+  RewriteCond %{HTTP_HOST} !\.test$ [NC]
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L,NE]
+</IfModule>
+
+<FilesMatch "^config.*\.php$">
+  Require all denied
+</FilesMatch>
+
+<FilesMatch "\.(sql|json|log|env|bak|backup)$">
+  Require all denied
+</FilesMatch>
