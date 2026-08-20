@@ -544,8 +544,8 @@ function crm_push_notify_lead_created(array $lead): array
         'body' => $name . ' entrou em contato. Atenda agora.',
         'url' => './index.php?lead=' . $leadId,
         'tag' => 'lead-' . (string) ($lead['id'] ?? uniqid('', true)),
-        'icon' => './assets/icon-192.png',
-        'badge' => './assets/icon-192.png',
+        'icon' => './assets/icon-192.png?v=20260819-sierra-icon-v1',
+        'badge' => './assets/icon-192.png?v=20260819-sierra-icon-v1',
         'lead_id' => (string) ($lead['id'] ?? ''),
     ]);
 }
@@ -605,8 +605,8 @@ function crm_push_notify_lead_reply(array $lead, string $message = '', string $m
         'body' => $name . ': ' . $preview,
         'url' => './whatsapp.php?lead=' . rawurlencode($leadId),
         'tag' => 'lead-reply-' . ($leadId !== '' ? $leadId : uniqid('', true)),
-        'icon' => './assets/icon-192.png',
-        'badge' => './assets/icon-192.png',
+        'icon' => './assets/icon-192.png?v=20260819-sierra-icon-v1',
+        'badge' => './assets/icon-192.png?v=20260819-sierra-icon-v1',
         'lead_id' => $leadId,
     ]);
 }

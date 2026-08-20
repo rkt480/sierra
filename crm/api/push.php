@@ -65,8 +65,8 @@ try {
             'body' => 'Este dispositivo está pronto para receber novos leads.',
             'url' => './index.php',
             'tag' => 'crm-push-test',
-            'icon' => './assets/icon-192.png',
-            'badge' => './assets/icon-192.png',
+            'icon' => './assets/icon-192.png?v=20260819-sierra-icon-v1',
+            'badge' => './assets/icon-192.png?v=20260819-sierra-icon-v1',
         ]);
         echo json_encode(['ok' => (bool) ($result['ok'] ?? false), 'result' => $result], JSON_UNESCAPED_UNICODE);
         exit;

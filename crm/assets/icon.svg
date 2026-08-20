@@ -1,3 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <image href="./mmdesign-mark.png" width="512" height="512" preserveAspectRatio="xMidYMid slice"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Sierra</title>
+  <desc id="desc">Ícone branco com a palavra SIERRA em preto.</desc>
+  <rect width="512" height="512" fill="#fff" />
+  <text
+    x="256"
+    y="286"
+    text-anchor="middle"
+    fill="#000"
+    font-family="Bodoni 72, Baskerville, Times New Roman, serif"
+    font-size="82"
+    font-weight="400"
+    letter-spacing="2.4"
+  >SIERRA</text>
 </svg>

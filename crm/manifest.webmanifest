@@ -9,16 +9,16 @@
   "orientation": "any",
   "id": "./index.php",
   "theme_color": "#0b1018",
-  "background_color": "#edf2f8",
+  "background_color": "#ffffff",
   "icons": [
     {
-      "src": "./assets/icon-192.png",
+      "src": "./assets/icon-192.png?v=20260819-sierra-icon-v1",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "./assets/icon-512.png",
+      "src": "./assets/icon-512.png?v=20260819-sierra-icon-v1",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

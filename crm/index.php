@@ -138,7 +138,7 @@ foreach ($filteredLeads as $lead) {
     <meta name="apple-mobile-web-app-title" content="CRM Sierra" />
     <title>CRM Sierra</title>
     <link rel="manifest" href="./manifest.webmanifest" />
-    <link rel="apple-touch-icon" sizes="180x180" href="./assets/icon-180.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./assets/icon-180.png?v=20260819-sierra-icon-v1" />
     <link rel="stylesheet" href="./assets/crm.css?v=20260819-sidebar-logo-v1" />
   </head>
   <body class="leads-page">
