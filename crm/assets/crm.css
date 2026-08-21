@@ -1282,15 +1282,15 @@ dd {
 }
 
 .lead-form-answers {
-  margin-top: 18px;
-  padding-top: 18px;
+  margin-top: 30px;
+  padding-top: 22px;
   border-top: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .lead-form-answers h3 {
-  margin: 0 0 12px;
-  padding-bottom: 0;
-  border-bottom: 0;
+  margin: 0 0 18px;
+  padding: 0 !important;
+  border-bottom: 0 !important;
 }
 
 .lead-form-answer-list {
