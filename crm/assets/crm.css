@@ -1288,7 +1288,9 @@ dd {
 }
 
 .lead-form-answers h3 {
-  margin-bottom: 12px;
+  margin: 0 0 12px;
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 
 .lead-form-answer-list {
