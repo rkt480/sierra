@@ -10,12 +10,6 @@ declare(strict_types=1);
 function crm_whatsapp_incoming_signature(array $lead): string
 {
     $incomingBlocks = [];
-    $initialMessage = trim((string) ($lead['message'] ?? ''));
-    $createdAt = (string) ($lead['created_at'] ?? '');
-
-    if ($initialMessage !== '') {
-        $incomingBlocks[] = 'initial|' . $createdAt . '|' . $initialMessage;
-    }
 
     $notes = trim((string) ($lead['notes'] ?? ''));
 

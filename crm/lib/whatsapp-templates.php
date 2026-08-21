@@ -48,11 +48,6 @@ function crm_whatsapp_template_render(string $text, array $values, array $lead =
 function crm_whatsapp_last_incoming_at(array $lead): ?int
 {
     $timestamps = [];
-    $createdAt = strtotime((string) ($lead['created_at'] ?? ''));
-
-    if (trim((string) ($lead['message'] ?? '')) !== '' && $createdAt !== false) {
-        $timestamps[] = $createdAt;
-    }
 
     $notes = (string) ($lead['notes'] ?? '');
     preg_match_all(

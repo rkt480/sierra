@@ -483,17 +483,6 @@ function whatsapp_page_messages_for_lead(array $lead): array
 {
     $provider = whatsapp_page_provider_for_lead($lead);
     $messages = [];
-    $initialMessage = trim((string) ($lead['message'] ?? ''));
-
-    if ($initialMessage !== '') {
-        $messages[] = [
-            'direction' => 'incoming',
-            'provider' => $provider,
-            'at' => (string) ($lead['created_at'] ?? date('Y-m-d H:i:s')),
-            'text' => $initialMessage,
-            'label' => 'Mensagem recebida',
-        ];
-    }
 
     $notes = trim((string) ($lead['notes'] ?? ''));
 
