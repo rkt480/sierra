@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 $leadTags = $leadTags ?? crm_decode_lead_tags($lead);
 $visibleLeadTags = $visibleLeadTags ?? lead_visible_tags($lead, $leadTags);
+$leadFormAnswers = crm_read_lead_form_answer_rows($lead);
 ?>
 <div class="lead-modal-card">
   <header class="lead-modal-header">
@@ -76,6 +77,19 @@ $visibleLeadTags = $visibleLeadTags ?? lead_visible_tags($lead, $leadTags);
             </dd>
           </div>
         </dl>
+        <?php if ($leadFormAnswers !== []): ?>
+          <section class="lead-form-answers" aria-labelledby="lead-form-answers-title">
+            <h3 id="lead-form-answers-title">Respostas do formulário</h3>
+            <dl class="lead-form-answer-list">
+              <?php foreach ($leadFormAnswers as $answer): ?>
+                <div class="lead-form-answer">
+                  <dt><?= htmlspecialchars((string) ($answer['question'] ?? 'Pergunta')) ?></dt>
+                  <dd><?= nl2br(htmlspecialchars((string) ($answer['answer'] ?? ''))) ?></dd>
+                </div>
+              <?php endforeach; ?>
+            </dl>
+          </section>
+        <?php endif; ?>
       </div>
 
       <?php if ($canManageSettings): ?>

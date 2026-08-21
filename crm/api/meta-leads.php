@@ -238,10 +238,6 @@ $message = crm_meta_lead_value($payload, $fields, ['message', 'question', 'neces
 
 $formAnswers = $fields;
 
-if ($formAnswers === []) {
-    $formAnswers = ['source' => 'facebook_lead_ads'];
-}
-
 $normalizedPayload = [
     'meta_lead_id' => substr($metaLeadId, 0, 120),
     'name' => $name !== '' ? $name : 'Lead Facebook Ads',

@@ -19,10 +19,7 @@ fputcsv($output, ['Nome', 'WhatsApp', 'CPF', 'Lead Score', 'Temperatura', 'Respo
 foreach ($leads as $lead) {
     $answers = array_map(
         static fn(array $answer): string => (string) ($answer['question'] ?? 'Pergunta') . ': ' . (string) ($answer['answer'] ?? ''),
-        array_values(array_filter(
-            crm_decode_lead_form_answers($lead),
-            static fn(array $answer): bool => (string) ($answer['question_id'] ?? '') !== 'segment'
-        ))
+        crm_read_lead_form_answer_rows($lead)
     );
 
     fputcsv($output, [

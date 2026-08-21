@@ -357,3 +357,81 @@ function crm_decode_lead_form_answers(array $lead): array
     $decoded = json_decode((string) ($lead['form_answers'] ?? '[]'), true);
     return is_array($decoded) ? $decoded : [];
 }
+
+function crm_form_answer_text(mixed $value): string
+{
+    if (is_array($value)) {
+        $parts = [];
+
+        foreach ($value as $part) {
+            $text = crm_form_answer_text($part);
+
+            if ($text !== '') {
+                $parts[] = $text;
+            }
+        }
+
+        return implode(', ', $parts);
+    }
+
+    if (is_object($value)) {
+        return '';
+    }
+
+    return trim((string) $value);
+}
+
+function crm_form_answer_key(string $value): string
+{
+    $value = strtolower(trim($value));
+    $value = str_replace(['-', ' '], '_', $value);
+
+    return preg_replace('/[^a-z0-9_]+/', '', $value) ?: '';
+}
+
+function crm_read_lead_form_answer_rows(array $lead): array
+{
+    $decoded = crm_decode_lead_form_answers($lead);
+    $rows = [];
+    $seen = [];
+
+    foreach ($decoded as $key => $value) {
+        if (is_array($value) && (array_key_exists('question', $value) || array_key_exists('question_id', $value))) {
+            $questionId = trim((string) ($value['question_id'] ?? ''));
+            $question = trim((string) ($value['question'] ?? $questionId ?: 'Pergunta'));
+            $answer = crm_form_answer_text($value['answer'] ?? $value['value'] ?? '');
+            $dedupeKey = crm_form_answer_key($questionId !== '' ? $questionId : $question);
+
+            if ($answer === '' || ($dedupeKey !== '' && isset($seen[$dedupeKey]))) {
+                continue;
+            }
+
+            if ($dedupeKey !== '') {
+                $seen[$dedupeKey] = true;
+            }
+
+            $rows[] = ['question' => $question, 'answer' => $answer];
+            continue;
+        }
+
+        if (!is_string($key)) {
+            continue;
+        }
+
+        $question = trim($key);
+        $answer = crm_form_answer_text($value);
+        $dedupeKey = crm_form_answer_key($question);
+
+        if ($question === '' || $answer === '' || ($dedupeKey !== '' && isset($seen[$dedupeKey]))) {
+            continue;
+        }
+
+        if ($dedupeKey !== '') {
+            $seen[$dedupeKey] = true;
+        }
+
+        $rows[] = ['question' => $question, 'answer' => $answer];
+    }
+
+    return $rows;
+}
