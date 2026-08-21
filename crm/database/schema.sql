@@ -5,6 +5,7 @@ CREATE DATABASE IF NOT EXISTS publi_ai_crm
 CREATE TABLE IF NOT EXISTS publi_ai_crm.leads (
   id VARCHAR(32) PRIMARY KEY,
   name VARCHAR(160) NOT NULL,
+  email VARCHAR(180) NULL,
   whatsapp VARCHAR(40) NOT NULL,
   profile_picture_url TEXT NULL,
   cpf VARCHAR(14) NULL,
@@ -21,6 +22,7 @@ CREATE TABLE IF NOT EXISTS publi_ai_crm.leads (
   referrer TEXT NULL,
   landing_path TEXT NULL,
   form_id VARCHAR(32) NULL,
+  meta_lead_id VARCHAR(120) NULL,
   form_answers LONGTEXT NULL,
   lead_score INT NULL,
   lead_temperature VARCHAR(20) NULL,
@@ -50,7 +52,8 @@ CREATE TABLE IF NOT EXISTS publi_ai_crm.leads (
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL,
   INDEX idx_leads_assigned_user (assigned_user_id, status, updated_at),
-  INDEX idx_leads_activity (last_activity_at, status)
+  INDEX idx_leads_activity (last_activity_at, status),
+  UNIQUE KEY uq_leads_meta_lead_id (meta_lead_id)
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci;

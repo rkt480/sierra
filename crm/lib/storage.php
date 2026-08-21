@@ -47,7 +47,7 @@ function crm_db(): PDO
 
 function crm_schema_version(): string
 {
-    return '20260813.1';
+    return '20260819.2';
 }
 
 function crm_schema_version_is_current(PDO $pdo): bool
@@ -504,6 +504,7 @@ function crm_seed_default_admin_user(PDO $pdo): void
 function crm_ensure_lead_columns(PDO $pdo): void
 {
     $columns = [
+        'email' => 'VARCHAR(180) NULL AFTER name',
         'cpf' => 'VARCHAR(14) NULL AFTER whatsapp',
         'profile_picture_url' => 'TEXT NULL AFTER whatsapp',
         'utm_source' => 'VARCHAR(120) NULL AFTER page',
@@ -516,6 +517,7 @@ function crm_ensure_lead_columns(PDO $pdo): void
         'tags' => 'TEXT NULL AFTER notes',
         'kanban_position' => 'INT NOT NULL DEFAULT 0 AFTER status',
         'form_id' => 'VARCHAR(32) NULL AFTER landing_path',
+        'meta_lead_id' => 'VARCHAR(120) NULL AFTER form_id',
         'form_answers' => 'LONGTEXT NULL AFTER form_id',
         'lead_score' => 'INT NULL AFTER form_answers',
         'lead_temperature' => 'VARCHAR(20) NULL AFTER lead_score',
@@ -553,6 +555,10 @@ function crm_ensure_lead_columns(PDO $pdo): void
 
     if (!crm_index_exists($pdo, 'leads', 'idx_leads_activity')) {
         $pdo->exec('ALTER TABLE leads ADD INDEX idx_leads_activity (last_activity_at, status)');
+    }
+
+    if (!crm_index_exists($pdo, 'leads', 'uq_leads_meta_lead_id')) {
+        $pdo->exec('ALTER TABLE leads ADD UNIQUE INDEX uq_leads_meta_lead_id (meta_lead_id)');
     }
 }
 
@@ -1736,6 +1742,17 @@ function crm_normalize_lead_whatsapp(string $phone): string
     return crm_whatsapp_number_variants($phone)[0] ?? '';
 }
 
+function crm_normalize_email(string $email): string
+{
+    $email = trim($email);
+
+    if ($email === '' || strlen($email) > 180 || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+        return '';
+    }
+
+    return strtolower($email);
+}
+
 function crm_normalize_profile_picture_url(string $url): string
 {
     $url = trim($url);
@@ -1796,6 +1813,25 @@ function crm_find_lead_by_whatsapp(string $whatsapp): ?array
     return null;
 }
 
+function crm_find_lead_by_meta_lead_id(string $metaLeadId): ?array
+{
+    $metaLeadId = trim($metaLeadId);
+
+    if ($metaLeadId === '') {
+        return null;
+    }
+
+    $stmt = crm_db()->prepare(
+        'SELECT * FROM leads
+         WHERE meta_lead_id = :meta_lead_id
+         LIMIT 1'
+    );
+    $stmt->execute(['meta_lead_id' => $metaLeadId]);
+    $lead = $stmt->fetch();
+
+    return is_array($lead) ? $lead : null;
+}
+
 function crm_create_lead(array $payload): array
 {
     $payload = crm_apply_page_attribution($payload);
@@ -1818,6 +1854,7 @@ function crm_create_lead(array $payload): array
     $lead = [
         'id' => bin2hex(random_bytes(8)),
         'name' => trim((string) ($payload['name'] ?? '')),
+        'email' => crm_normalize_email((string) ($payload['email'] ?? '')) ?: null,
         'whatsapp' => crm_normalize_lead_whatsapp((string) ($payload['whatsapp'] ?? '')),
         'profile_picture_url' => crm_normalize_profile_picture_url((string) ($payload['profile_picture_url'] ?? '')),
         'cpf' => crm_normalize_cpf((string) ($payload['cpf'] ?? '')),
@@ -1834,6 +1871,7 @@ function crm_create_lead(array $payload): array
         'referrer' => trim((string) ($payload['referrer'] ?? '')),
         'landing_path' => trim((string) ($payload['landing_path'] ?? '')),
         'form_id' => trim((string) ($payload['form_id'] ?? '')) ?: null,
+        'meta_lead_id' => trim((string) ($payload['meta_lead_id'] ?? '')) ?: null,
         'form_answers' => json_encode($payload['form_answers'] ?? [], JSON_UNESCAPED_UNICODE) ?: '[]',
         'lead_score' => isset($payload['lead_score']) ? max(0, min(100, (int) $payload['lead_score'])) : null,
         'lead_temperature' => trim((string) ($payload['lead_temperature'] ?? '')) ?: null,
@@ -1867,9 +1905,9 @@ function crm_create_lead(array $payload): array
 
     $stmt = crm_db()->prepare(
         'INSERT INTO leads
-        (id, name, whatsapp, profile_picture_url, cpf, company, segment, advertises, message, page, utm_source, utm_medium, utm_campaign, utm_content, utm_term, referrer, landing_path, form_id, form_answers, lead_score, lead_temperature, score_reasons, status, notes, commercial_notes, tags, assigned_user_id, assigned_at, last_activity_at, last_activity_type, sla_last_checked_at, estimated_value, proposal_value, expected_close_date, lost_reason, first_contact_at, closed_at, lost_at, whatsapp_status, whatsapp_sent_at, whatsapp_error, followup_flow_id, followup_started_at, created_at, updated_at)
+        (id, name, email, whatsapp, profile_picture_url, cpf, company, segment, advertises, message, page, utm_source, utm_medium, utm_campaign, utm_content, utm_term, referrer, landing_path, form_id, meta_lead_id, form_answers, lead_score, lead_temperature, score_reasons, status, notes, commercial_notes, tags, assigned_user_id, assigned_at, last_activity_at, last_activity_type, sla_last_checked_at, estimated_value, proposal_value, expected_close_date, lost_reason, first_contact_at, closed_at, lost_at, whatsapp_status, whatsapp_sent_at, whatsapp_error, followup_flow_id, followup_started_at, created_at, updated_at)
         VALUES
-        (:id, :name, :whatsapp, :profile_picture_url, :cpf, :company, :segment, :advertises, :message, :page, :utm_source, :utm_medium, :utm_campaign, :utm_content, :utm_term, :referrer, :landing_path, :form_id, :form_answers, :lead_score, :lead_temperature, :score_reasons, :status, :notes, :commercial_notes, :tags, :assigned_user_id, :assigned_at, :last_activity_at, :last_activity_type, :sla_last_checked_at, :estimated_value, :proposal_value, :expected_close_date, :lost_reason, :first_contact_at, :closed_at, :lost_at, :whatsapp_status, :whatsapp_sent_at, :whatsapp_error, :followup_flow_id, :followup_started_at, :created_at, :updated_at)'
+        (:id, :name, :email, :whatsapp, :profile_picture_url, :cpf, :company, :segment, :advertises, :message, :page, :utm_source, :utm_medium, :utm_campaign, :utm_content, :utm_term, :referrer, :landing_path, :form_id, :meta_lead_id, :form_answers, :lead_score, :lead_temperature, :score_reasons, :status, :notes, :commercial_notes, :tags, :assigned_user_id, :assigned_at, :last_activity_at, :last_activity_type, :sla_last_checked_at, :estimated_value, :proposal_value, :expected_close_date, :lost_reason, :first_contact_at, :closed_at, :lost_at, :whatsapp_status, :whatsapp_sent_at, :whatsapp_error, :followup_flow_id, :followup_started_at, :created_at, :updated_at)'
     );
     $stmt->execute($lead);
 
@@ -1888,6 +1926,40 @@ function crm_create_lead(array $payload): array
 }
 
 function crm_create_lead_once(array $payload): array
+{
+    $metaLeadId = trim((string) ($payload['meta_lead_id'] ?? ''));
+
+    if ($metaLeadId !== '') {
+        $db = crm_db();
+        $metaLockName = 'crm_meta_lead_' . substr(hash('sha256', $metaLeadId), 0, 40);
+        $metaLockStmt = $db->prepare('SELECT GET_LOCK(:lock_name, 10)');
+        $metaLockStmt->execute(['lock_name' => $metaLockName]);
+
+        if ((int) $metaLockStmt->fetchColumn() !== 1) {
+            throw new RuntimeException('Não foi possível reservar o lead da Meta para deduplicação.');
+        }
+
+        try {
+            $existingMetaLead = crm_find_lead_by_meta_lead_id($metaLeadId);
+
+            if ($existingMetaLead !== null) {
+                return [
+                    'lead' => $existingMetaLead,
+                    'created' => false,
+                ];
+            }
+
+            return crm_create_lead_once_by_whatsapp($payload);
+        } finally {
+            $unlockMetaStmt = $db->prepare('SELECT RELEASE_LOCK(:lock_name)');
+            $unlockMetaStmt->execute(['lock_name' => $metaLockName]);
+        }
+    }
+
+    return crm_create_lead_once_by_whatsapp($payload);
+}
+
+function crm_create_lead_once_by_whatsapp(array $payload): array
 {
     $whatsapp = (string) ($payload['whatsapp'] ?? '');
     $normalizedWhatsapp = crm_normalize_lead_whatsapp($whatsapp);

@@ -15,7 +15,7 @@ function crm_render_lead_notification(array $lead, string $template = ''): strin
     $message = $template;
 
     if ($message === '') {
-        $message = "Novo lead recebido:\n\nData/Hora: {{created_at_br}}\nNome: {{name}}\nWhatsApp: {{whatsapp}}\nEmpresa: {{company}}\nLead Score: {{lead_score}}\nTemperatura: {{lead_temperature}}\nSite/Landing: {{segment}}\nControle dos leads: {{advertises}}\nNecessidade: {{message}}";
+        $message = "Novo lead recebido:\n\nData/Hora: {{created_at_br}}\nNome: {{name}}\nE-mail: {{email}}\nWhatsApp: {{whatsapp}}\nEmpresa: {{company}}\nLead Score: {{lead_score}}\nTemperatura: {{lead_temperature}}\nSite/Landing: {{segment}}\nControle dos leads: {{advertises}}\nNecessidade: {{message}}";
     } elseif (
         !str_contains($message, '{{created_at}}')
         && !str_contains($message, '{{created_at_br}}')
@@ -29,6 +29,7 @@ function crm_render_lead_notification(array $lead, string $template = ''): strin
         '{{created_at_br}}' => crm_format_lead_created_at($lead),
         '{{lead_created_at}}' => crm_format_lead_created_at($lead),
         '{{name}}' => (string) ($lead['name'] ?? ''),
+        '{{email}}' => (string) ($lead['email'] ?? ''),
         '{{whatsapp}}' => (string) ($lead['whatsapp'] ?? ''),
         '{{company}}' => (string) ($lead['company'] ?? ''),
         '{{segment}}' => (string) ($lead['segment'] ?? ''),

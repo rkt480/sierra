@@ -52,6 +52,12 @@ $visibleLeadTags = $visibleLeadTags ?? lead_visible_tags($lead, $leadTags);
           <button type="submit">Salvar contato</button>
         </form>
         <dl class="lead-details">
+          <?php if (trim((string) ($lead['email'] ?? '')) !== ''): ?>
+            <div>
+              <dt>E-mail</dt>
+              <dd><?= htmlspecialchars((string) $lead['email']) ?></dd>
+            </div>
+          <?php endif; ?>
           <div>
             <dt>CPF</dt>
             <dd><?= htmlspecialchars(crm_format_cpf((string) ($lead['cpf'] ?? '')) ?: 'Não informado') ?></dd>

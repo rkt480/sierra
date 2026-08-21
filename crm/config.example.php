@@ -26,6 +26,9 @@ return [
         'verify_token' => '',
         'app_secret' => '',
     ],
+    'make_leads' => [
+        'webhook_secret' => '',
+    ],
     'pilot_status' => [
         'base_url' => 'https://pilotstatus.com.br/v1',
         'api_key' => '',
