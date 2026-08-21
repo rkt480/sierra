@@ -60,6 +60,29 @@ if (!crm_move_lead($id, $status, $orders)) {
     exit;
 }
 
+$automaticFollowup = [
+    'ok' => true,
+    'triggered' => false,
+    'reason' => 'status_unchanged_or_without_automatic_followup',
+];
+
+if (is_array($leadBeforeUpdate) && (string) ($leadBeforeUpdate['status'] ?? '') !== $status) {
+    try {
+        $automaticFollowup = crm_trigger_automatic_followup(
+            $id,
+            (string) ($leadBeforeUpdate['status'] ?? ''),
+            $status
+        );
+    } catch (Throwable $error) {
+        error_log('Erro ao iniciar follow-up automático do lead ' . $id . ': ' . $error->getMessage());
+        $automaticFollowup = [
+            'ok' => false,
+            'triggered' => false,
+            'error' => 'O lead foi movido, mas o follow-up automático não pôde ser iniciado.',
+        ];
+    }
+}
+
 $metaResult = ['ok' => false, 'skipped' => true, 'error' => 'Meta CAPI não executada.'];
 
 if (is_array($leadBeforeUpdate) && (string) ($leadBeforeUpdate['status'] ?? '') !== $status) {
@@ -75,4 +98,8 @@ if (is_array($leadBeforeUpdate) && (string) ($leadBeforeUpdate['status'] ?? '') 
     }
 }
 
-echo json_encode(['ok' => true, 'meta' => $metaResult]);
+echo json_encode([
+    'ok' => true,
+    'meta' => $metaResult,
+    'followup' => $automaticFollowup,
+]);

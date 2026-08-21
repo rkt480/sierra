@@ -47,7 +47,7 @@ function crm_db(): PDO
 
 function crm_schema_version(): string
 {
-    return '20260819.2';
+    return '20260821.1';
 }
 
 function crm_schema_version_is_current(PDO $pdo): bool
@@ -193,6 +193,7 @@ function crm_ensure_crm_schema(PDO $pdo): void
             position INT NOT NULL DEFAULT 0,
             is_system TINYINT(1) NOT NULL DEFAULT 0,
             active TINYINT(1) NOT NULL DEFAULT 1,
+            auto_followup_flow_id INT NULL,
             created_at DATETIME NOT NULL,
             updated_at DATETIME NOT NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
@@ -302,6 +303,7 @@ function crm_ensure_crm_schema(PDO $pdo): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
     );
 
+    crm_ensure_kanban_columns($pdo);
     crm_ensure_user_columns($pdo);
     crm_seed_default_admin_user($pdo);
     crm_seed_default_kanban_columns($pdo);
@@ -334,6 +336,17 @@ function crm_ensure_followup_step_columns(PDO $pdo): void
 
     if (!crm_index_exists($pdo, 'followup_steps', 'idx_followup_steps_template')) {
         $pdo->exec('ALTER TABLE followup_steps ADD INDEX idx_followup_steps_template (template_id)');
+    }
+}
+
+function crm_ensure_kanban_columns(PDO $pdo): void
+{
+    if (!crm_column_exists($pdo, 'kanban_columns', 'auto_followup_flow_id')) {
+        $pdo->exec('ALTER TABLE kanban_columns ADD COLUMN auto_followup_flow_id INT NULL AFTER active');
+    }
+
+    if (!crm_index_exists($pdo, 'kanban_columns', 'idx_kanban_columns_auto_followup')) {
+        $pdo->exec('ALTER TABLE kanban_columns ADD INDEX idx_kanban_columns_auto_followup (auto_followup_flow_id)');
     }
 }
 
@@ -672,8 +685,8 @@ function crm_create_kanban_column(string $label): ?string
 
     $position = (int) crm_db()->query('SELECT COALESCE(MAX(position), 0) + 10 FROM kanban_columns')->fetchColumn();
     $stmt = crm_db()->prepare(
-        'INSERT INTO kanban_columns (status, label, position, is_system, active, created_at, updated_at)
-        VALUES (:status, :label, :position, 0, 1, :created_at, :updated_at)'
+        'INSERT INTO kanban_columns (status, label, position, is_system, active, auto_followup_flow_id, created_at, updated_at)
+        VALUES (:status, :label, :position, 0, 1, NULL, :created_at, :updated_at)'
     );
     $stmt->execute([
         'status' => $status,
@@ -693,6 +706,7 @@ function crm_update_kanban_columns(array $columns, array $removeStatuses = []): 
         'UPDATE kanban_columns
         SET label = :label,
             position = :position,
+            auto_followup_flow_id = :auto_followup_flow_id,
             updated_at = :updated_at
         WHERE status = :status'
     );
@@ -706,10 +720,24 @@ function crm_update_kanban_columns(array $columns, array $removeStatuses = []): 
             continue;
         }
 
+        $autoFollowupFlowId = null;
+
+        if ($status === 'followup') {
+            $candidateFlowId = max(0, (int) ($column['auto_followup_flow_id'] ?? 0));
+
+            if ($candidateFlowId > 0) {
+                $flow = crm_find_followup_flow($candidateFlowId);
+                $autoFollowupFlowId = is_array($flow) && (int) ($flow['active'] ?? 0) === 1
+                    ? $candidateFlowId
+                    : null;
+            }
+        }
+
         $update->execute([
             'status' => $status,
             'label' => $label,
             'position' => $position,
+            'auto_followup_flow_id' => $autoFollowupFlowId,
             'updated_at' => date('Y-m-d H:i:s'),
         ]);
         $position += 10;
@@ -2318,9 +2346,14 @@ function crm_move_lead(string $id, string $status, array $orders): bool
             return false;
         }
 
+        $previousStatus = (string) ($lead['status'] ?? '');
         $now = date('Y-m-d H:i:s');
         $dateFields = '';
         $dateParams = [];
+
+        if ($previousStatus === 'followup' && $status !== 'followup') {
+            $dateFields .= ', followup_flow_id = NULL, followup_started_at = NULL';
+        }
 
         if ((string) ($lead['first_contact_at'] ?? '') === '' && $status !== 'novo') {
             $dateFields .= ', first_contact_at = :first_contact_at';
@@ -2352,6 +2385,21 @@ function crm_move_lead(string $id, string $status, array $orders): bool
             'last_activity_type' => 'kanban_move',
             'updated_at' => $now,
         ] + $dateParams + $accessParams);
+
+        if ($previousStatus === 'followup' && $status !== 'followup') {
+            $cancelQueue = $pdo->prepare(
+                'UPDATE followup_queue
+                 SET status = "cancelado",
+                     sent_at = NULL,
+                     error = :error
+                 WHERE lead_id = :lead_id
+                   AND status = "pendente"'
+            );
+            $cancelQueue->execute([
+                'lead_id' => $id,
+                'error' => 'Cancelado porque o lead saiu da coluna Follow-up.',
+            ]);
+        }
 
         $updatePosition = $pdo->prepare(
             'UPDATE leads
@@ -2689,6 +2737,60 @@ function crm_assign_followup_flow(string $leadId, int $flowId): bool
         $db->rollBack();
         throw $error;
     }
+}
+
+function crm_trigger_automatic_followup(string $leadId, string $fromStatus, string $toStatus): array
+{
+    if ($toStatus !== 'followup' || $fromStatus === $toStatus) {
+        return [
+            'ok' => true,
+            'triggered' => false,
+            'reason' => 'status_without_automatic_followup',
+        ];
+    }
+
+    $stmt = crm_db()->prepare(
+        'SELECT auto_followup_flow_id
+         FROM kanban_columns
+         WHERE status = :status
+           AND active = 1
+         LIMIT 1'
+    );
+    $stmt->execute(['status' => $toStatus]);
+    $flowId = (int) ($stmt->fetchColumn() ?: 0);
+
+    if ($flowId <= 0) {
+        return [
+            'ok' => true,
+            'triggered' => false,
+            'reason' => 'no_flow_configured',
+        ];
+    }
+
+    $flow = crm_find_followup_flow($flowId);
+
+    if (!is_array($flow) || (int) ($flow['active'] ?? 0) !== 1) {
+        return [
+            'ok' => false,
+            'triggered' => false,
+            'error' => 'O fluxo automático configurado não está ativo.',
+        ];
+    }
+
+    if (!crm_assign_followup_flow($leadId, $flowId)) {
+        return [
+            'ok' => false,
+            'triggered' => false,
+            'error' => 'Não foi possível iniciar o fluxo automático.',
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'triggered' => true,
+        'flow_id' => $flowId,
+        'flow_name' => (string) ($flow['name'] ?? ''),
+    ];
 }
 
 function crm_stop_followup_after_incoming_reply(string $leadId): array

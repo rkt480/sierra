@@ -85,6 +85,12 @@ async function persistLeadStatus(leadId, status, orders) {
   if (data.meta && data.meta.ok === false && data.meta.skipped !== true) {
     console.warn("Meta CAPI não confirmou o evento.", data.meta);
   }
+
+  if (data.followup && data.followup.ok === false) {
+    window.alert(data.followup.error || "O lead foi movido, mas o follow-up automático não pôde ser iniciado.");
+  }
+
+  return data;
 }
 
 function leadHasCpf(card) {

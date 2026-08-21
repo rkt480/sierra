@@ -176,8 +176,10 @@ CREATE TABLE IF NOT EXISTS kanban_columns (
   position INT NOT NULL DEFAULT 0,
   is_system TINYINT(1) NOT NULL DEFAULT 0,
   active TINYINT(1) NOT NULL DEFAULT 1,
+  auto_followup_flow_id INT NULL,
   created_at DATETIME NOT NULL,
-  updated_at DATETIME NOT NULL
+  updated_at DATETIME NOT NULL,
+  INDEX idx_kanban_columns_auto_followup (auto_followup_flow_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO kanban_columns (status, label, position, is_system, active, created_at, updated_at)

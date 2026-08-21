@@ -14,6 +14,7 @@ $canManageSettings = crm_current_user_is_admin();
 $assignableUsers = crm_read_assignable_users(false);
 $leads = crm_read_lead_summaries();
 $kanbanColumns = crm_read_kanban_columns();
+$followupFlows = $canManageSettings ? crm_read_followup_flows(true) : [];
 $scheduled = ($_GET['scheduled'] ?? '') === '1';
 $calendarError = (string) ($_GET['calendar_error'] ?? '');
 $calendarErrorMessages = [
@@ -391,6 +392,18 @@ foreach ($filteredLeads as $lead) {
                     <input type="text" name="columns[<?= (int) $index ?>][label]" value="<?= htmlspecialchars((string) $column['label']) ?>" required />
                   </label>
                   <span><?= htmlspecialchars((string) $column['status']) ?></span>
+                  <?php if ((string) ($column['status'] ?? '') === 'followup'): ?>
+                    <label class="field-wide">
+                      Fluxo automático ao entrar nesta coluna
+                      <select name="columns[<?= (int) $index ?>][auto_followup_flow_id]">
+                        <option value="0">Não iniciar automaticamente</option>
+                        <?php foreach ($followupFlows as $flow): ?>
+                          <option value="<?= (int) $flow['id'] ?>" <?= (int) ($column['auto_followup_flow_id'] ?? 0) === (int) $flow['id'] ? 'selected' : '' ?>><?= htmlspecialchars((string) $flow['name']) ?></option>
+                        <?php endforeach; ?>
+                      </select>
+                      <small class="commercial-help">Ao mover um lead para Follow-up, esse fluxo será agendado automaticamente.</small>
+                    </label>
+                  <?php endif; ?>
                   <?php if ((int) ($column['is_system'] ?? 0) === 0): ?>
                     <label class="checkbox-field remove-column">
                       <input type="checkbox" name="remove_status[]" value="<?= htmlspecialchars((string) $column['status']) ?>" />
@@ -527,7 +540,7 @@ foreach ($filteredLeads as $lead) {
     </main>
       </div>
     </div>
-    <script src="./assets/crm.js?v=20260813-lazy-lead-details-v1"></script>
+    <script src="./assets/crm.js?v=20260821-auto-followup-v1"></script>
     <script src="./assets/crm-navigation.js?v=20260812-fast-navigation-v3"></script>
   </body>
 </html>
