@@ -389,6 +389,63 @@ function crm_form_answer_key(string $value): string
     return preg_replace('/[^a-z0-9_]+/', '', $value) ?: '';
 }
 
+function crm_is_contact_form_answer_question(string $question): bool
+{
+    $key = crm_form_answer_key($question);
+
+    if ($key === '') {
+        return false;
+    }
+
+    $contactKeys = [
+        'nome',
+        'nome_completo',
+        'name',
+        'full_name',
+        'fullname',
+        'email',
+        'e_mail',
+        'telefone',
+        'telefone_comercial',
+        'numero_de_telefone',
+        'numero_de_telefone_comercial',
+        'phone',
+        'phone_number',
+        'mobile',
+        'mobile_phone',
+        'whatsapp',
+        'celular',
+    ];
+
+    return in_array($key, $contactKeys, true)
+        || str_contains($key, 'telefone')
+        || str_contains($key, 'phone')
+        || str_contains($key, 'whatsapp');
+}
+
+function crm_form_answer_display_label(string $value): string
+{
+    $label = trim(str_replace('_', ' ', $value));
+    $label = preg_replace('/\s+/', ' ', $label) ?: $label;
+
+    if ($label === '') {
+        return $label;
+    }
+
+    if (function_exists('mb_substr') && function_exists('mb_strtoupper')) {
+        return mb_strtoupper(mb_substr($label, 0, 1, 'UTF-8'), 'UTF-8') . mb_substr($label, 1, null, 'UTF-8');
+    }
+
+    return ucfirst($label);
+}
+
+function crm_form_answer_display_text(string $value): string
+{
+    $text = trim(str_replace('_', ' ', $value));
+
+    return preg_replace('/\s+/', ' ', $text) ?: $text;
+}
+
 function crm_read_lead_form_answer_rows(array $lead): array
 {
     $decoded = crm_decode_lead_form_answers($lead);
@@ -402,7 +459,12 @@ function crm_read_lead_form_answer_rows(array $lead): array
             $answer = crm_form_answer_text($value['answer'] ?? $value['value'] ?? '');
             $dedupeKey = crm_form_answer_key($questionId !== '' ? $questionId : $question);
 
-            if ($answer === '' || ($dedupeKey !== '' && isset($seen[$dedupeKey]))) {
+            if (
+                $answer === ''
+                || crm_is_contact_form_answer_question($questionId)
+                || crm_is_contact_form_answer_question($question)
+                || ($dedupeKey !== '' && isset($seen[$dedupeKey]))
+            ) {
                 continue;
             }
 
@@ -422,7 +484,12 @@ function crm_read_lead_form_answer_rows(array $lead): array
         $answer = crm_form_answer_text($value);
         $dedupeKey = crm_form_answer_key($question);
 
-        if ($question === '' || $answer === '' || ($dedupeKey !== '' && isset($seen[$dedupeKey]))) {
+        if (
+            $question === ''
+            || $answer === ''
+            || crm_is_contact_form_answer_question($question)
+            || ($dedupeKey !== '' && isset($seen[$dedupeKey]))
+        ) {
             continue;
         }
 

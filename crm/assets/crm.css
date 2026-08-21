@@ -1293,33 +1293,35 @@ dd {
 
 .lead-form-answer-list {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   margin: 0;
 }
 
 .lead-form-answer {
   min-width: 0;
-  padding: 13px 15px;
-  background: rgba(248, 250, 252, 0.86);
-  border: 1px solid rgba(148, 163, 184, 0.24);
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid rgba(148, 163, 184, 0.28);
   border-radius: 12px;
+  box-shadow: 0 8px 18px rgba(70, 83, 108, 0.04);
 }
 
 .lead-form-answer dt {
-  margin-bottom: 5px;
+  margin-bottom: 7px;
   color: #64748b;
-  font-size: 0.74rem;
+  font-size: 0.78rem;
   font-weight: 900;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  line-height: 1.35;
 }
 
 .lead-form-answer dd {
   margin: 0;
   color: #1e293b;
-  font-size: 0.92rem;
+  font-size: 0.94rem;
   font-weight: 700;
-  line-height: 1.5;
+  line-height: 1.45;
   overflow-wrap: anywhere;
   white-space: normal;
 }
@@ -2300,6 +2302,7 @@ textarea:focus {
   }
 
   .lead-details,
+  .lead-form-answer-list,
   .lead-modal-forms,
   .lead-contact-edit,
   .commercial-grid,

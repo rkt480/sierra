@@ -83,8 +83,8 @@ $leadFormAnswers = crm_read_lead_form_answer_rows($lead);
             <dl class="lead-form-answer-list">
               <?php foreach ($leadFormAnswers as $answer): ?>
                 <div class="lead-form-answer">
-                  <dt><?= htmlspecialchars((string) ($answer['question'] ?? 'Pergunta')) ?></dt>
-                  <dd><?= nl2br(htmlspecialchars((string) ($answer['answer'] ?? ''))) ?></dd>
+                  <dt><?= htmlspecialchars(crm_form_answer_display_label((string) ($answer['question'] ?? 'Pergunta'))) ?></dt>
+                  <dd><?= nl2br(htmlspecialchars(crm_form_answer_display_text((string) ($answer['answer'] ?? '')))) ?></dd>
                 </div>
               <?php endforeach; ?>
             </dl>
