@@ -113,12 +113,12 @@ $leadFormAnswers = crm_read_lead_form_answer_rows($lead);
             <dd><?= htmlspecialchars(trim((string) ($lead['utm_campaign'] ?? '')) !== '' ? (string) $lead['utm_campaign'] : 'Sem UTM') ?></dd>
           </div>
           <div>
-            <dt>UTM content / term</dt>
-            <dd>
-              <?= htmlspecialchars((string) ($lead['utm_content'] ?? '')) ?>
-              <?= trim((string) ($lead['utm_term'] ?? '')) !== '' ? ' / ' . htmlspecialchars((string) $lead['utm_term']) : '' ?>
-              <?= trim((string) ($lead['utm_content'] ?? '')) === '' && trim((string) ($lead['utm_term'] ?? '')) === '' ? 'Sem UTM' : '' ?>
-            </dd>
+            <dt>Conjunto de anúncios</dt>
+            <dd><?= htmlspecialchars(trim((string) ($lead['utm_content'] ?? '')) !== '' ? (string) $lead['utm_content'] : 'Sem UTM') ?></dd>
+          </div>
+          <div>
+            <dt>Anúncio</dt>
+            <dd><?= htmlspecialchars(trim((string) ($lead['utm_term'] ?? '')) !== '' ? (string) $lead['utm_term'] : 'Sem UTM') ?></dd>
           </div>
           <div class="field-wide">
             <dt>Página/referrer</dt>

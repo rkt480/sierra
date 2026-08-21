@@ -226,12 +226,12 @@ if ($name === '' && $email === '' && $whatsapp === '') {
     crm_meta_lead_response(['ok' => false, 'error' => 'O lead não possui nome, e-mail ou telefone.'], 422);
 }
 
-$campaign = crm_meta_lead_value($payload, [], ['campaign_name', 'campaign', 'utm_campaign']);
-$adSet = crm_meta_lead_value($payload, [], ['adset_name', 'ad_set_name', 'utm_content']);
-$ad = crm_meta_lead_value($payload, [], ['ad_name', 'ad', 'utm_term']);
-$formId = crm_meta_lead_value($payload, [], ['form_id', 'lead_form_id']);
-$formName = crm_meta_lead_value($payload, [], ['form_name', 'form_title']);
-$page = crm_meta_lead_value($payload, [], ['page_name', 'page', 'page_id']);
+$campaign = crm_meta_lead_value($payload, $fields, ['campaign_name', 'campaign', 'utm_campaign', 'campaign_id']);
+$adSet = crm_meta_lead_value($payload, $fields, ['adset_name', 'ad_set_name', 'utm_content', 'ad_set_id']);
+$ad = crm_meta_lead_value($payload, $fields, ['ad_name', 'ad', 'utm_term', 'ad_id']);
+$formId = crm_meta_lead_value($payload, $fields, ['form_id', 'lead_form_id']);
+$formName = crm_meta_lead_value($payload, $fields, ['form_name', 'form_title']);
+$page = crm_meta_lead_value($payload, $fields, ['page_name', 'page', 'page_id']);
 $company = crm_meta_lead_value($payload, $fields, ['company', 'company_name', 'empresa', 'business_name']);
 $segment = crm_meta_lead_value($payload, $fields, ['segment', 'industry', 'ramo', 'segmento']);
 $message = crm_meta_lead_value($payload, $fields, ['message', 'question', 'necessidade', 'observacao', 'observação']);
