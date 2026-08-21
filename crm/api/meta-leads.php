@@ -69,7 +69,7 @@ function crm_meta_lead_extract_fields(array $payload): array
 {
     $fields = [];
 
-    foreach (['field_data', 'fields', 'answers'] as $containerKey) {
+    foreach (['field_data', 'fields', 'answers', 'data'] as $containerKey) {
         $container = $payload[$containerKey] ?? null;
 
         if (is_string($container)) {
