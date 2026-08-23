@@ -18,6 +18,54 @@ function crm_whatsapp_provider_label(?string $provider = null): string
     };
 }
 
+function crm_whatsapp_reply_context_note(array $context): string
+{
+    $stored = [];
+
+    foreach (['id', 'text', 'type', 'url'] as $key) {
+        $value = trim((string) ($context[$key] ?? ''));
+
+        if ($value !== '') {
+            $stored[$key] = $value;
+        }
+    }
+
+    if ($stored === []) {
+        return '';
+    }
+
+    $json = json_encode($stored, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+    return is_string($json) && $json !== '' ? "\n[crm_reply]" . $json : '';
+}
+
+function crm_whatsapp_response_message_id(array $result): string
+{
+    $response = $result['response'] ?? null;
+    $candidates = [];
+
+    if (is_array($response)) {
+        $candidates = [
+            $response['id'] ?? null,
+            $response['message_id'] ?? null,
+            $response['messageId'] ?? null,
+            is_array($response['messages'] ?? null) ? ($response['messages'][0]['id'] ?? null) : null,
+            is_array($response['data'] ?? null) ? ($response['data']['id'] ?? null) : null,
+            is_array($response['data'] ?? null) && is_array($response['data']['messages'] ?? null)
+                ? ($response['data']['messages'][0]['id'] ?? null)
+                : null,
+        ];
+    }
+
+    foreach ($candidates as $candidate) {
+        if (is_scalar($candidate) && trim((string) $candidate) !== '') {
+            return trim((string) $candidate);
+        }
+    }
+
+    return '';
+}
+
 function crm_whatsapp_after_hours_settings(): array
 {
     $settings = crm_read_settings();
@@ -133,6 +181,11 @@ function crm_whatsapp_send_after_hours_reply(
         $messageIdMarker = $incomingMessageId !== ''
             ? "\nCRM gatilho de horário: " . $incomingMessageId
             : '';
+        $sentMessageId = crm_whatsapp_response_message_id($result);
+
+        if ($sentMessageId !== '') {
+            $messageIdMarker .= "\nCRM message ID: " . $sentMessageId;
+        }
         $queuedLabel = $provider === 'pilot_status' ? ' (aceita pelo provedor)' : '';
         $note = 'Resposta automática fora do horário enviada via '
             . crm_whatsapp_provider_label($provider)
@@ -205,7 +258,7 @@ function crm_whatsapp_send_followup(array $queueItem): array
             : meta_whatsapp_send_template($number, $template, array_values($providerVariables));
 
         if (($result['ok'] ?? false) === true) {
-            crm_record_followup_template_send($queueItem, $template, $providerVariables);
+            crm_record_followup_template_send($queueItem, $template, $providerVariables, $result);
         }
 
         return $result;
@@ -236,7 +289,7 @@ function crm_whatsapp_send_followup(array $queueItem): array
         : pilot_status_send_followup($queueItem);
 
     if (($result['ok'] ?? false) === true) {
-        crm_record_followup_text_send($queueItem);
+        crm_record_followup_text_send($queueItem, $result);
     }
 
     return $result;
@@ -299,7 +352,7 @@ function crm_whatsapp_followup_seller_name(array $queueItem): string
     return $seller !== '' ? $seller : 'Equipe comercial';
 }
 
-function crm_record_followup_template_send(array $queueItem, array $template, array $providerVariables): void
+function crm_record_followup_template_send(array $queueItem, array $template, array $providerVariables, array $result = []): void
 {
     $provider = crm_whatsapp_provider();
     $providerLabel = crm_whatsapp_provider_label($provider);
@@ -312,9 +365,14 @@ function crm_record_followup_template_send(array $queueItem, array $template, ar
         $renderContext
     );
     $seller = crm_whatsapp_followup_seller_name($queueItem);
-    $note = 'Mensagem enviada via ' . $providerLabel . ' em ' . date('d/m/Y H:i:s') . ":\n"
-        . 'Follow-up · template "' . (string) ($template['name'] ?? 'sem nome') . '" · vendedor: ' . $seller . "\n"
+    $note = 'Template "' . (string) ($template['name'] ?? 'sem nome') . '" enviado via ' . $providerLabel . ' em ' . date('d/m/Y H:i:s') . ":\n"
+        . 'Follow-up · vendedor: ' . $seller . "\n"
         . $renderedBody;
+    $sentMessageId = crm_whatsapp_response_message_id($result);
+
+    if ($sentMessageId !== '') {
+        $note .= "\nCRM message ID: " . $sentMessageId;
+    }
 
     try {
         crm_append_lead_note((string) ($queueItem['lead_id'] ?? ''), $note);
@@ -324,12 +382,17 @@ function crm_record_followup_template_send(array $queueItem, array $template, ar
     }
 }
 
-function crm_record_followup_text_send(array $queueItem): void
+function crm_record_followup_text_send(array $queueItem, array $result = []): void
 {
     $provider = crm_whatsapp_provider();
     $note = 'Mensagem enviada via ' . crm_whatsapp_provider_label($provider) . ' em ' . date('d/m/Y H:i:s') . ":\n"
         . 'Follow-up · vendedor: ' . crm_whatsapp_followup_seller_name($queueItem) . "\n"
         . (string) ($queueItem['message'] ?? '');
+    $sentMessageId = crm_whatsapp_response_message_id($result);
+
+    if ($sentMessageId !== '') {
+        $note .= "\nCRM message ID: " . $sentMessageId;
+    }
 
     try {
         crm_append_lead_note((string) ($queueItem['lead_id'] ?? ''), $note);

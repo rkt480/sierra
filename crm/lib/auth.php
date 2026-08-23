@@ -33,6 +33,12 @@ function crm_request_expects_json(): bool
 function crm_start_session(): void
 {
     if (session_status() !== PHP_SESSION_ACTIVE) {
+        // O padrão do PHP costuma encerrar sessões ociosas em cerca de 24 minutos.
+        // O CRM precisa manter a sessão durante o expediente, enquanto a regra de
+        // horário do vendedor continua sendo aplicada em cada nova requisição.
+        $sessionLifetime = 24 * 60 * 60;
+        ini_set('session.gc_maxlifetime', (string) $sessionLifetime);
+        ini_set('session.lazy_write', '0');
         ini_set('session.use_strict_mode', '1');
         ini_set('session.use_only_cookies', '1');
         ini_set('session.cookie_httponly', '1');

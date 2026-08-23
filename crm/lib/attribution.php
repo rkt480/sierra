@@ -11,7 +11,18 @@ declare(strict_types=1);
 
 function crm_attribution_fields(): array
 {
-    return ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'referrer', 'landing_path'];
+    return [
+        'utm_source',
+        'utm_medium',
+        'utm_campaign',
+        'utm_content',
+        'utm_term',
+        'referrer',
+        'landing_path',
+        'referral_source_id',
+        'referral_source_type',
+        'referral_ctwa_clid',
+    ];
 }
 
 function crm_attribution_empty(): array
@@ -77,6 +88,21 @@ function crm_attribution_find_referral(mixed $value, int $depth = 0): ?array
     return null;
 }
 
+function crm_attribution_referral_value(array $referral, array $keys): string
+{
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $referral) && is_scalar($referral[$key])) {
+            $value = trim((string) $referral[$key]);
+
+            if ($value !== '') {
+                return $value;
+            }
+        }
+    }
+
+    return '';
+}
+
 function crm_attribution_from_url(string $url): array
 {
     $attribution = crm_attribution_empty();
@@ -128,6 +154,10 @@ function crm_extract_marketing_attribution(array $payload): array
     if ($referral === null) {
         return $attribution;
     }
+
+    $attribution['referral_source_id'] = crm_attribution_referral_value($referral, ['source_id', 'sourceId']);
+    $attribution['referral_source_type'] = strtolower(crm_attribution_referral_value($referral, ['source_type', 'sourceType']));
+    $attribution['referral_ctwa_clid'] = crm_attribution_referral_value($referral, ['ctwa_clid', 'ctwaClid']);
 
     $sourceUrl = '';
 

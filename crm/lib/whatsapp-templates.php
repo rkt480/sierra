@@ -51,10 +51,35 @@ function crm_whatsapp_last_incoming_at(array $lead): ?int
 
     $notes = (string) ($lead['notes'] ?? '');
     preg_match_all(
-        '/Mensagem recebida(?: pelo provedor anterior| pela Meta Cloud API| pela Pilot Status)? em (\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}):/u',
+        '/(?:Mensagem|Mídia) recebida(?: pelo provedor anterior| pela Meta Cloud API| pela Pilot Status)? em (\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}):/u',
         $notes,
         $matches
     );
+
+    foreach ($matches[1] ?? [] as $date) {
+        $timestamp = DateTime::createFromFormat('d/m/Y H:i', (string) $date);
+
+        if ($timestamp instanceof DateTime) {
+            $timestamps[] = $timestamp->getTimestamp();
+        }
+    }
+
+    if ($timestamps === []) {
+        return null;
+    }
+
+    return max($timestamps);
+}
+
+function crm_whatsapp_last_template_sent_at(array $lead): ?int
+{
+    $notes = (string) ($lead['notes'] ?? '');
+    preg_match_all(
+        '/^Template "[^"]+" enviado via .* em (\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}):/mu',
+        $notes,
+        $matches
+    );
+    $timestamps = [];
 
     foreach ($matches[1] ?? [] as $date) {
         $timestamp = DateTime::createFromFormat('d/m/Y H:i', (string) $date);
@@ -81,17 +106,25 @@ function crm_whatsapp_is_in_24h_window(array $lead): bool
 function crm_whatsapp_window_label(array $lead): string
 {
     $lastIncoming = crm_whatsapp_last_incoming_at($lead);
+    $lastTemplateSent = crm_whatsapp_last_template_sent_at($lead);
+    $remaining = $lastIncoming !== null ? max(0, 86400 - (time() - $lastIncoming)) : 0;
 
-    if ($lastIncoming === null) {
-        return 'Aguardando uma mensagem do contato';
+    if ($remaining > 0) {
+        $hours = intdiv($remaining, 3600);
+        $minutes = intdiv($remaining % 3600, 60);
+
+        return 'Janela aberta · restam ' . $hours . 'h ' . $minutes . 'min';
     }
 
-    $remaining = max(0, 86400 - (time() - $lastIncoming));
-    $hours = intdiv($remaining, 3600);
-    $minutes = intdiv($remaining % 3600, 60);
+    if (
+        $lastTemplateSent !== null
+        && ($lastIncoming === null || $lastTemplateSent > $lastIncoming)
+    ) {
+        return 'Template enviado · aguardando resposta da cliente para liberar novas mensagens';
+    }
 
-    return $remaining > 0
-        ? 'Janela aberta · restam ' . $hours . 'h ' . $minutes . 'min'
+    return $lastIncoming === null
+        ? 'Aguardando uma mensagem do contato'
         : 'Janela encerrada · use um template aprovado';
 }
 

@@ -102,6 +102,7 @@ foreach ($incomingMessages as $incoming) {
     $whatsapp = (string) ($incoming['number'] ?? '');
     $message = trim((string) ($incoming['text'] ?? ''));
     $name = trim((string) ($incoming['name'] ?? ''));
+    $replyContext = is_array($incoming['reply_context'] ?? null) ? $incoming['reply_context'] : [];
     $profilePictureUrl = crm_normalize_profile_picture_url((string) ($incoming['profile_picture_url'] ?? ''));
 
     if ($whatsapp === '') {
@@ -146,9 +147,11 @@ foreach ($incomingMessages as $incoming) {
         }
 
         if (($leadResult['created'] ?? false) === false && $message !== '') {
+            $incomingNote = 'Mensagem recebida pela Meta Cloud API em ' . date('d/m/Y H:i') . ":\n" . $message;
+            $incomingNote .= crm_whatsapp_reply_context_note($replyContext);
             crm_append_lead_note(
                 (string) $lead['id'],
-                'Mensagem recebida pela Meta Cloud API em ' . date('d/m/Y H:i') . ":\n" . $message
+                $incomingNote
             );
             crm_notify_lead_reply_push(
                 $lead,

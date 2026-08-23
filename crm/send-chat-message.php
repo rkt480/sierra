@@ -149,8 +149,8 @@ $result = $hasMedia
     : crm_whatsapp_send_text($number, $messageWithSender, false);
 
 if (($result['ok'] ?? false) === true) {
-    $response = is_array($result['response'] ?? null) ? $result['response'] : [];
-    $pilotStatusMessageId = trim((string) ($response['id'] ?? ''));
+    $sentMessageId = crm_whatsapp_response_message_id($result);
+    $pilotStatusMessageId = crm_whatsapp_provider() === 'pilot_status' ? $sentMessageId : '';
     $pilotStatusQueued = crm_whatsapp_provider() === 'pilot_status';
     $storedMedia = $hasMedia
         ? pilot_status_store_crm_media_file($mediaPath, $mimeType, $fileName)
@@ -169,6 +169,10 @@ if (($result['ok'] ?? false) === true) {
         error_log('Não foi possível preservar a mídia enviada no histórico do CRM: ' . (string) ($storedMedia['error'] ?? 'erro desconhecido.'));
     }
 
+    if ($sentMessageId !== '' && is_array($mediaForHistory)) {
+        $mediaForHistory['crm_message_id'] = $sentMessageId;
+    }
+
     $sentDescription = !$hasMedia
         ? $messageWithSender
         : ($mediaForHistory !== null
@@ -181,6 +185,10 @@ if (($result['ok'] ?? false) === true) {
 
     if ($pilotStatusMessageId !== '') {
         $sentDescription .= "\nPilot Status ID: " . $pilotStatusMessageId;
+    }
+
+    if ($sentMessageId !== '') {
+        $sentDescription .= "\nCRM message ID: " . $sentMessageId;
     }
     crm_append_lead_note(
         $leadId,

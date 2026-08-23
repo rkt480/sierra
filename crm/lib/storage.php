@@ -1564,7 +1564,13 @@ function crm_read_leads(): array
 {
     [$accessSql, $accessParams] = crm_lead_access_sql('leads');
     $stmt = crm_db()->prepare(
-        'SELECT leads.*, crm_users.name AS assigned_user_name, crm_users.username AS assigned_username
+        'SELECT leads.*, crm_users.name AS assigned_user_name, crm_users.username AS assigned_username,
+                crm_users.role AS assigned_user_role,
+                crm_users.access_schedule_enabled AS assigned_access_schedule_enabled,
+                crm_users.access_start_time AS assigned_access_start_time,
+                crm_users.access_end_time AS assigned_access_end_time,
+                crm_users.access_saturday_enabled AS assigned_access_saturday_enabled,
+                crm_users.access_sunday_enabled AS assigned_access_sunday_enabled
         FROM leads
         LEFT JOIN crm_users ON crm_users.id = leads.assigned_user_id
         WHERE 1 = 1' . $accessSql . '
@@ -2176,6 +2182,53 @@ function crm_update_lead_profile_picture(string $id, string $url): bool
         'profile_picture_url' => $url,
         'updated_at' => date('Y-m-d H:i:s'),
     ] + $accessParams);
+
+    return $stmt->rowCount() > 0;
+}
+
+function crm_update_lead_attribution(string $id, array $attribution): bool
+{
+    $lead = crm_find_lead($id);
+
+    if ($lead === null) {
+        return false;
+    }
+
+    $fields = [];
+    $params = [
+        'id' => $id,
+        'updated_at' => date('Y-m-d H:i:s'),
+    ];
+
+    $attributionFields = [
+        'utm_source' => ['pilot_status', ''],
+        'utm_medium' => ['whatsapp', ''],
+        'utm_campaign' => ['mensagem_recebida', ''],
+        'utm_content' => [''],
+    ];
+
+    foreach ($attributionFields as $field => $replaceableValues) {
+        $value = trim((string) ($attribution[$field] ?? ''));
+        $current = trim((string) ($lead[$field] ?? ''));
+
+        if ($value === '' || !in_array($current, $replaceableValues, true)) {
+            continue;
+        }
+
+        $fields[] = $field . ' = :' . $field;
+        $params[$field] = $value;
+    }
+
+    if ($fields === []) {
+        return false;
+    }
+
+    $fields[] = 'updated_at = :updated_at';
+    [$accessSql, $accessParams] = crm_lead_access_sql('leads');
+    $stmt = crm_db()->prepare(
+        'UPDATE leads SET ' . implode(', ', $fields) . ' WHERE id = :id' . $accessSql
+    );
+    $stmt->execute($params + $accessParams);
 
     return $stmt->rowCount() > 0;
 }

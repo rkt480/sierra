@@ -55,7 +55,31 @@ if ($filterSeller === 'unassigned') {
     $filterSeller = '';
 }
 
-$leads = array_values(array_filter($leads, static function (array $lead) use ($filterSellerId, $filterUnassigned): bool {
+$normalizeFilterDate = static function (string $value): string {
+    $value = trim($value);
+
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+        return '';
+    }
+
+    [$year, $month, $day] = array_map('intval', explode('-', $value));
+
+    return checkdate($month, $day, $year) ? $value : '';
+};
+$filterDateFrom = $normalizeFilterDate((string) ($_GET['date_from'] ?? ''));
+$filterDateTo = $normalizeFilterDate((string) ($_GET['date_to'] ?? ''));
+
+$leads = array_values(array_filter($leads, static function (array $lead) use ($filterSellerId, $filterUnassigned, $filterDateFrom, $filterDateTo): bool {
+    $createdDate = substr(trim((string) ($lead['created_at'] ?? '')), 0, 10);
+
+    if ($filterDateFrom !== '' && ($createdDate === '' || $createdDate < $filterDateFrom)) {
+        return false;
+    }
+
+    if ($filterDateTo !== '' && ($createdDate === '' || $createdDate > $filterDateTo)) {
+        return false;
+    }
+
     if ($filterSellerId !== null && (int) ($lead['assigned_user_id'] ?? 0) !== $filterSellerId) {
         return false;
     }
@@ -85,13 +109,29 @@ $closedThisMonth = array_values(array_filter($closedLeads, static function (arra
 }));
 $closedThisMonthValue = array_sum(array_map(static fn(array $lead): float => dashboard_pipeline_value($lead), $closedThisMonth));
 $contactDurations = [];
+$contactTimeZone = crm_sla_timezone();
 
 foreach ($leads as $lead) {
-    $createdAt = strtotime((string) ($lead['created_at'] ?? ''));
-    $firstContactAt = strtotime((string) ($lead['first_contact_at'] ?? ''));
+    $createdAtValue = trim((string) (($lead['assigned_at'] ?? '') ?: ($lead['created_at'] ?? '')));
+    $firstContactValue = trim((string) ($lead['first_contact_at'] ?? ''));
 
-    if ($createdAt !== false && $firstContactAt !== false && $firstContactAt >= $createdAt) {
-        $contactDurations[] = $firstContactAt - $createdAt;
+    if ($createdAtValue === '' || $firstContactValue === '') {
+        continue;
+    }
+
+    try {
+        $createdAt = new DateTimeImmutable($createdAtValue, $contactTimeZone);
+        $firstContactAt = new DateTimeImmutable($firstContactValue, $contactTimeZone);
+    } catch (Throwable $error) {
+        continue;
+    }
+
+    if ($firstContactAt >= $createdAt) {
+        $contactDurations[] = crm_sla_access_window_seconds(
+            $createdAt,
+            $firstContactAt,
+            crm_sla_access_user_from_lead($lead)
+        );
     }
 }
 
@@ -154,7 +194,7 @@ arsort($lostReasons);
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dashboard | CRM</title>
-    <link rel="stylesheet" href="./assets/crm.css?v=20260819-sidebar-logo-v1" />
+    <link rel="stylesheet" href="./assets/crm.css?v=20260823-dashboard-filter-v3" />
   </head>
   <body class="settings-page dashboard-page">
     <div class="app-shell">
@@ -225,8 +265,16 @@ arsort($lostReasons);
                 <?php endforeach; ?>
               </select>
             </label>
+            <label for="dashboard-date-from">
+              Data inicial
+              <input id="dashboard-date-from" type="date" name="date_from" value="<?= htmlspecialchars($filterDateFrom) ?>" />
+            </label>
+            <label for="dashboard-date-to">
+              Data final
+              <input id="dashboard-date-to" type="date" name="date_to" value="<?= htmlspecialchars($filterDateTo) ?>" />
+            </label>
             <button type="submit">Filtrar</button>
-            <?php if ($filterSeller !== ''): ?>
+            <?php if ($filterSeller !== '' || $filterDateFrom !== '' || $filterDateTo !== ''): ?>
               <a class="secondary-action" href="dashboard.php">Limpar</a>
             <?php endif; ?>
           </form>
@@ -257,7 +305,7 @@ arsort($lostReasons);
               <small><?= htmlspecialchars(dashboard_currency($closedThisMonthValue)) ?></small>
             </article>
             <article>
-              <span>Tempo 1º contato</span>
+              <span>Tempo 1º contato útil</span>
               <strong><?= htmlspecialchars($averageFirstContactLabel) ?></strong>
             </article>
           </section>

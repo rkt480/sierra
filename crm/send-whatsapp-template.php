@@ -83,6 +83,12 @@ if (($result['ok'] ?? false) !== true) {
 
 $renderedBody = crm_whatsapp_template_render((string) ($template['body_text'] ?? ''), $providerVariables, $lead);
 $description = 'Template "' . (string) ($template['name'] ?? '') . '" enviado via ' . ($provider === 'pilot_status' ? 'Pilot Status' : 'Meta Cloud API') . ' em ' . date('d/m/Y H:i') . ":\n" . $renderedBody;
+$sentMessageId = crm_whatsapp_response_message_id($result);
+
+if ($sentMessageId !== '') {
+    $description .= "\nCRM message ID: " . $sentMessageId;
+}
+
 crm_append_lead_note($leadId, $description);
 crm_update_whatsapp_status($leadId, 'enviado');
 
