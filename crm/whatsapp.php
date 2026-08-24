@@ -1398,7 +1398,7 @@ if ($isWaConversationFragment) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="csrf-token" content="<?= htmlspecialchars($csrfToken) ?>" />
     <title>WhatsApp | Sierra</title>
-    <link rel="stylesheet" href="./assets/crm.css?v=20260822-reply-context-v1" />
+    <link rel="stylesheet" href="./assets/crm.css?v=20260824-form-answers-v1" />
   </head>
   <body class="whatsapp-page whatsapp-crm-page" data-wa-initial-view="<?= is_array($activeLead) ? 'thread' : 'inbox' ?>" data-wa-mobile-view="<?= is_array($activeLead) ? 'thread' : 'inbox' ?>" data-wa-active-lead-id="<?= htmlspecialchars((string) ($activeLead['id'] ?? '')) ?>" data-wa-incoming-signature="<?= htmlspecialchars(is_array($activeLead) ? crm_whatsapp_incoming_signature($activeLead) : '') ?>" data-wa-lead-feed-version="<?= htmlspecialchars($leadFeedVersion) ?>">
     <main class="wa-web-shell" aria-label="Atendimento WhatsApp do CRM">
@@ -2366,7 +2366,7 @@ if ($isWaConversationFragment) {
       // atualização da conversa usa a escuta de evento abaixo, que funciona
       // mesmo quando as notificações do navegador não estão habilitadas.
       if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("./sw.js?v=20260813-lazy-lead-details-v1", {
+      navigator.serviceWorker.register("./sw.js?v=20260824-cache-refresh-v1", {
           scope: "./",
           updateViaCache: "none",
         }).catch(() => {});

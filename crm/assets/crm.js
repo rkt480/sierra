@@ -1534,7 +1534,7 @@ if (installButton) {
 }
 
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js?v=20260813-lazy-lead-details-v1", {
+  navigator.serviceWorker.register("./sw.js?v=20260824-cache-refresh-v1", {
     scope: "./",
     updateViaCache: "none",
   })
