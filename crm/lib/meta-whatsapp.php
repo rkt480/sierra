@@ -389,7 +389,7 @@ function meta_whatsapp_send_media(
         return ['ok' => false, 'error' => 'WhatsApp inválido.'];
     }
 
-    if (!in_array($mediaType, ['image', 'audio', 'document'], true)) {
+    if (!in_array($mediaType, ['image', 'audio', 'video', 'document'], true)) {
         return ['ok' => false, 'error' => 'Tipo de mídia não suportado.'];
     }
 
@@ -402,7 +402,7 @@ function meta_whatsapp_send_media(
     $mediaId = trim((string) ($upload['response']['id'] ?? ''));
     $mediaPayload = ['id' => $mediaId];
 
-    if ($mediaType === 'image' && trim($caption) !== '') {
+    if (in_array($mediaType, ['image', 'video'], true) && trim($caption) !== '') {
         $mediaPayload['caption'] = trim($caption);
     }
 

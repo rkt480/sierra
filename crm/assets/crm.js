@@ -1302,8 +1302,29 @@ async function pushConfigRequest() {
   }
 }
 
+function pushSubscriptionPayload(subscription) {
+  const json = typeof subscription?.toJSON === "function"
+    ? subscription.toJSON()
+    : subscription;
+
+  if (!json?.endpoint || !json?.keys) {
+    throw new Error("O navegador retornou uma inscrição de notificações inválida.");
+  }
+
+  return { endpoint: json.endpoint, keys: json.keys };
+}
+
+async function pushSaveSubscription(subscription) {
+  return pushRequest("subscribe", {
+    method: "POST",
+    body: JSON.stringify(pushSubscriptionPayload(subscription)),
+  });
+}
+
 async function syncPushState() {
-  if (!pushEnableButton || !pushOnboarding || pushActivationInFlight) {
+  const hasPushUi = Boolean(pushEnableButton && pushOnboarding);
+
+  if ((!hasPushUi && !pushCsrfToken) || pushActivationInFlight) {
     return;
   }
 
@@ -1311,22 +1332,24 @@ async function syncPushState() {
   const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
 
   if (!window.isSecureContext) {
-    showPushUnavailable("Abra o CRM por um endereço HTTPS para ativar notificações.");
+    if (hasPushUi) showPushUnavailable("Abra o CRM por um endereço HTTPS para ativar notificações.");
     return;
   }
 
   if (!("serviceWorker" in navigator)) {
-    showPushUnavailable("Este navegador não oferece suporte ao aplicativo.");
+    if (hasPushUi) showPushUnavailable("Este navegador não oferece suporte ao aplicativo.");
     return;
   }
 
   if (!("PushManager" in window)) {
-    showPushUnavailable(
-      isIos && !isStandalone
-        ? "No iPhone, primeiro adicione o CRM à Tela de Início e abra pelo novo ícone."
-        : "Este navegador não oferece suporte a notificações push.",
-      isIos && !isStandalone
-    );
+    if (hasPushUi) {
+      showPushUnavailable(
+        isIos && !isStandalone
+          ? "No iPhone, primeiro adicione o CRM à Tela de Início e abra pelo novo ícone."
+          : "Este navegador não oferece suporte a notificações push.",
+        isIos && !isStandalone
+      );
+    }
     return;
   }
 
@@ -1334,7 +1357,7 @@ async function syncPushState() {
     const config = await pushConfigRequest();
 
     if (!config.configured) {
-      pushOnboarding.hidden = true;
+      if (hasPushUi) pushOnboarding.hidden = true;
       return;
     }
 
@@ -1345,21 +1368,13 @@ async function syncPushState() {
     const subscription = await registration.pushManager.getSubscription();
     const permission = window.Notification?.permission || "default";
 
-    // A inscrição local é a fonte imediata de verdade no aparelho. Se o
-    // servidor perdeu a linha da assinatura (por exemplo, após uma limpeza
-    // de sessão), reaproveitamos a inscrição existente sem pedir permissão
-    // novamente ao vendedor.
-    if (subscription && permission === "granted" && Number(config.subscriptions || 0) !== 1) {
-      const json = subscription.toJSON();
-      await pushRequest("subscribe", {
-        method: "POST",
-        body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
-      });
+    if (subscription && permission === "granted") {
+      await pushSaveSubscription(subscription);
     }
 
     const subscribed = Boolean(subscription && permission === "granted");
 
-    if (pushActivationInFlight) {
+    if (!hasPushUi || pushActivationInFlight) {
       return;
     }
 
@@ -1381,6 +1396,11 @@ async function syncPushState() {
       setPushStatus("Leva apenas um toque no botão e outro em Permitir.");
     }
   } catch (error) {
+    if (!hasPushUi) {
+      console.warn("Não foi possível sincronizar as notificações.", error);
+      return;
+    }
+
     if (pushActivationInFlight) {
       return;
     }
@@ -1454,8 +1474,6 @@ async function enablePushNotifications() {
       ]);
     }
 
-    const json = subscription.toJSON();
-
     // A permissão e a inscrição local já estão prontas. A partir daqui a
     // tela não fica presa esperando o servidor ou o alerta de teste.
     pushEnableButton.hidden = true;
@@ -1463,10 +1481,7 @@ async function enablePushNotifications() {
     pushEnableButton.disabled = false;
 
     try {
-      await pushRequest("subscribe", {
-        method: "POST",
-        body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
-      });
+      await pushSaveSubscription(subscription);
     } catch (subscribeError) {
       console.warn("A inscrição local foi criada, mas não foi sincronizada com o servidor.", subscribeError);
       pushEnableButton.hidden = false;
@@ -1534,7 +1549,36 @@ if (installButton) {
 }
 
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js?v=20260824-cache-refresh-v1", {
+  navigator.serviceWorker.addEventListener("message", (event) => {
+    if (event.data?.type !== "crm-push-subscription-changed") {
+      return;
+    }
+
+    const changedSubscription = event.data.subscription;
+    const syncChangedSubscription = changedSubscription?.endpoint
+      ? pushSaveSubscription(changedSubscription)
+      : Promise.resolve();
+
+    syncChangedSubscription
+      .then(() => syncPushState())
+      .catch((error) => console.warn("Não foi possível renovar a inscrição de notificações.", error));
+  });
+
+  window.addEventListener("online", () => {
+    void syncPushState();
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      void syncPushState();
+    }
+  });
+
+  window.setInterval(() => {
+    void syncPushState();
+  }, 5 * 60 * 1000);
+
+  navigator.serviceWorker.register("./sw.js?v=20260828-sierra-media-timeline-v1", {
     scope: "./",
     updateViaCache: "none",
   })

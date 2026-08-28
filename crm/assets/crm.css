@@ -1333,6 +1333,129 @@ dd {
   display: none;
 }
 
+.lead-timeline-intro {
+  margin: -2px 0 18px;
+  color: #64748b;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.lead-timeline {
+  position: relative;
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lead-timeline::before {
+  position: absolute;
+  top: 16px;
+  bottom: 16px;
+  left: 11px;
+  width: 2px;
+  content: "";
+  background: #dbe5f0;
+}
+
+.lead-timeline-event {
+  position: relative;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.lead-timeline-marker {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 12px;
+  height: 12px;
+  margin: 10px 0 0 5px;
+  background: #64748b;
+  border: 3px solid #f8fafc;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgba(100, 116, 139, 0.26);
+}
+
+.lead-timeline-event.is-lead_received .lead-timeline-marker,
+.lead-timeline-event.is-first_contact .lead-timeline-marker,
+.lead-timeline-event.is-whatsapp_message_sent .lead-timeline-marker,
+.lead-timeline-event.is-whatsapp_template_sent .lead-timeline-marker {
+  background: #0ea5e9;
+  box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.28);
+}
+
+.lead-timeline-event.is-lead_moved .lead-timeline-marker,
+.lead-timeline-event.is-lead_assignment .lead-timeline-marker,
+.lead-timeline-event.is-commercial_note .lead-timeline-marker {
+  background: #8b5cf6;
+  box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.28);
+}
+
+.lead-timeline-event.is-followup_started .lead-timeline-marker,
+.lead-timeline-event.is-followup_sent .lead-timeline-marker,
+.lead-timeline-event.is-appointment_scheduled .lead-timeline-marker {
+  background: #10b981;
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.28);
+}
+
+.lead-timeline-event.is-followup_failed .lead-timeline-marker,
+.lead-timeline-event.is-whatsapp_message_failed .lead-timeline-marker,
+.lead-timeline-event.is-whatsapp_template_failed .lead-timeline-marker {
+  background: #ef4444;
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.28);
+}
+
+.lead-timeline-event-card {
+  min-width: 0;
+  padding: 13px 15px;
+  background: #fff;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 13px;
+  box-shadow: 0 8px 18px rgba(70, 83, 108, 0.04);
+}
+
+.lead-timeline-event-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.lead-timeline-event-heading strong {
+  color: #1e293b;
+  font-size: 0.94rem;
+}
+
+.lead-timeline-event-heading time {
+  flex: 0 0 auto;
+  color: #64748b;
+  font-size: 0.76rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.lead-timeline-event-actor,
+.lead-timeline-event-description {
+  margin: 4px 0 0;
+  line-height: 1.45;
+}
+
+.lead-timeline-event-actor {
+  color: #0f766e;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.lead-timeline-event-description {
+  color: #64748b;
+  font-size: 0.84rem;
+  white-space: pre-line;
+}
+
 .lead-modal-forms {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3655,6 +3778,17 @@ textarea:focus {
   height: 34px;
 }
 
+.whatsapp-crm-page .wa-media-preview video {
+  flex: 0 0 96px;
+  width: 96px !important;
+  height: 54px !important;
+  max-width: 96px !important;
+  max-height: 54px !important;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #0f172a;
+}
+
 .wa-media-remove {
   min-width: auto !important;
   min-height: auto !important;
@@ -5378,6 +5512,7 @@ textarea:focus {
 
 .whatsapp-crm-page .wa-composer-tools {
   position: relative;
+  z-index: 2;
   justify-content: center;
   gap: 0;
 }
@@ -5408,8 +5543,10 @@ textarea:focus {
 }
 
 .whatsapp-crm-page .wa-emoji-menu {
-  position: absolute;
-  bottom: 50px;
+  position: fixed;
+  z-index: 9999;
+  top: auto;
+  bottom: auto;
   left: 0;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -5497,10 +5634,28 @@ textarea:focus {
 }
 
 .whatsapp-crm-page .wa-media-preview {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
   padding: 6px 10px;
   color: #475569;
   background: #f8fafc;
   border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.whatsapp-crm-page .wa-media-preview > span,
+.whatsapp-crm-page .wa-media-preview > strong {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.whatsapp-crm-page .wa-media-preview .wa-media-remove {
+  flex: 0 0 auto;
+  margin-left: 0;
 }
 
 .whatsapp-crm-page .wa-recording-preview {
@@ -6567,7 +6722,6 @@ textarea:focus {
   }
 
   .whatsapp-crm-page .wa-emoji-menu {
-    bottom: 50px;
     left: 0;
   }
 }

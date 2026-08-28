@@ -18,6 +18,10 @@
       </div>
     </header>
 
+    <?php if ((string) ($activeLead['whatsapp_status'] ?? '') === 'falhou' && trim((string) ($activeLead['whatsapp_error'] ?? '')) !== ''): ?>
+      <div class="wa-toast"><?= htmlspecialchars(whatsapp_page_friendly_failure_message((string) $activeLead['whatsapp_error'])) ?></div>
+    <?php endif; ?>
+
     <div class="wa-message-surface">
       <div class="wa-day-chip">Histórico do CRM</div>
 
@@ -74,11 +78,11 @@
 
       <form class="wa-composer <?= $wa24hOpen ? '' : 'is-locked' ?>" method="post" action="send-chat-message.php" enctype="multipart/form-data" data-wa-composer <?= $wa24hOpen ? '' : 'aria-disabled="true"' ?> <?= $wa24hOpen ? '' : 'hidden' ?>>
         <div class="wa-composer-tools">
-          <button class="wa-tool-button" type="button" title="Anexar imagem, áudio ou documento" data-wa-attach aria-label="Anexar imagem, áudio ou documento">
+          <label class="wa-tool-button" for="wa-media-input" title="Anexar imagem, áudio, vídeo ou documento" data-wa-attach aria-label="Anexar imagem, áudio, vídeo ou documento" tabindex="0">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M12 5v14M5 12h14" />
             </svg>
-          </button>
+          </label>
           <button class="wa-tool-button" type="button" title="Inserir emoji" data-wa-emoji aria-label="Inserir emoji">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="12" cy="12" r="8.5" />
@@ -93,7 +97,7 @@
             <button type="button" data-wa-emoji-value="❤️">❤️</button>
             <button type="button" data-wa-emoji-value="🙏">🙏</button>
           </div>
-          <input class="wa-media-input" type="file" name="media" accept="image/jpeg,image/png,image/webp,image/gif,audio/*,application/pdf,application/msword,application/rtf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/plain,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" data-wa-media hidden />
+          <input id="wa-media-input" class="wa-media-input" type="file" name="media" accept="image/jpeg,image/png,image/webp,image/gif,audio/*,video/*,application/pdf,application/msword,application/rtf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/plain,.mp4,.m4v,.3gp,.3g2,.mov,.webm,.mkv,.avi,.wmv,.flv,.mpeg,.mpg,.ogv,.m2ts,.mts,.ts,.vob,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" data-wa-media hidden />
         </div>
         <input type="hidden" name="_csrf_token" value="<?= htmlspecialchars($csrfToken) ?>" />
         <input type="hidden" name="lead_id" value="<?= htmlspecialchars((string) ($activeLead['id'] ?? '')) ?>" />

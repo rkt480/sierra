@@ -128,6 +128,20 @@ CREATE TABLE IF NOT EXISTS lead_assignment_logs (
   INDEX idx_lead_assignment_logs_to_user (to_user_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS lead_timeline_events (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  lead_id VARCHAR(32) NOT NULL,
+  event_type VARCHAR(60) NOT NULL,
+  actor_user_id INT NULL,
+  actor_name VARCHAR(160) NOT NULL DEFAULT 'Sistema',
+  title VARCHAR(255) NOT NULL,
+  description TEXT NULL,
+  metadata LONGTEXT NULL,
+  created_at DATETIME NOT NULL,
+  INDEX idx_lead_timeline_events_lead (lead_id, created_at),
+  INDEX idx_lead_timeline_events_type (event_type, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS crm_push_subscriptions (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   user_id INT NOT NULL,

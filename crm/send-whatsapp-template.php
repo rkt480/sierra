@@ -77,6 +77,12 @@ if (($result['ok'] ?? false) !== true) {
     $providerLabel = $provider === 'pilot_status' ? 'Pilot Status' : 'Meta Cloud API';
     $error = 'Falha ao enviar template via ' . $providerLabel . ': ' . (string) ($result['error'] ?? 'Erro desconhecido.');
     crm_append_lead_note($leadId, $error . ' em ' . date('d/m/Y H:i') . '.');
+    crm_record_lead_timeline_event(
+        $leadId,
+        'whatsapp_template_failed',
+        'Falha ao enviar template pelo WhatsApp',
+        'Template ' . trim((string) ($template['name'] ?? '')) . ' via ' . $providerLabel . '. ' . $error
+    );
     header('Location: ' . $redirect . '&send_error=' . rawurlencode($error));
     exit;
 }
@@ -91,6 +97,22 @@ if ($sentMessageId !== '') {
 
 crm_append_lead_note($leadId, $description);
 crm_update_whatsapp_status($leadId, 'enviado');
+
+if ((string) ($lead['first_contact_at'] ?? '') === '') {
+    crm_record_lead_timeline_event(
+        $leadId,
+        'first_contact',
+        'Atendimento iniciado',
+        'Primeiro contato enviado pelo WhatsApp.'
+    );
+}
+
+crm_record_lead_timeline_event(
+    $leadId,
+    'whatsapp_template_sent',
+    'Template enviado pelo WhatsApp',
+    'Template ' . trim((string) ($template['name'] ?? '')) . ' enviado via ' . ($provider === 'pilot_status' ? 'Pilot Status' : 'Meta Cloud API') . '.'
+);
 
 header('Location: ' . $redirect . '&sent=1');
 exit;

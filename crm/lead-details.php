@@ -29,6 +29,9 @@ $leadFormAnswers = crm_read_lead_form_answer_rows($lead);
         <button type="button" data-lead-tab="origem">Origem e UTM</button>
       <?php endif; ?>
       <button type="button" data-lead-tab="comercial">Comercial</button>
+      <?php if ($canViewTimeline): ?>
+        <button type="button" data-lead-tab="historico">Histórico</button>
+      <?php endif; ?>
     </aside>
 
     <section class="lead-modal-content">
@@ -269,6 +272,37 @@ $leadFormAnswers = crm_read_lead_form_answer_rows($lead);
           </section>
         </div>
       </div>
+
+      <?php if ($canViewTimeline): ?>
+      <div class="lead-tab-panel" data-lead-panel="historico" hidden>
+        <h3>Histórico do lead</h3>
+        <p class="lead-timeline-intro">Acompanhe as movimentações, atendimentos e automações deste contato.</p>
+        <ol class="lead-timeline" aria-label="Histórico de atividades do lead">
+          <?php foreach ($leadTimeline as $timelineEvent): ?>
+            <?php
+              $eventType = preg_replace('/[^a-z0-9_-]/i', '', (string) ($timelineEvent['event_type'] ?? 'activity')) ?: 'activity';
+              $eventDate = (string) ($timelineEvent['created_at'] ?? '');
+              $eventTimestamp = strtotime($eventDate);
+              $eventActor = trim((string) ($timelineEvent['actor_name'] ?? '')) ?: 'Sistema';
+              $eventDescription = trim((string) ($timelineEvent['description'] ?? ''));
+            ?>
+            <li class="lead-timeline-event is-<?= htmlspecialchars($eventType) ?>">
+              <span class="lead-timeline-marker" aria-hidden="true"></span>
+              <div class="lead-timeline-event-card">
+                <div class="lead-timeline-event-heading">
+                  <strong><?= htmlspecialchars((string) ($timelineEvent['title'] ?? 'Atividade registrada')) ?></strong>
+                  <time datetime="<?= htmlspecialchars($eventDate) ?>"><?= htmlspecialchars($eventTimestamp !== false ? date('d/m/Y H:i', $eventTimestamp) : $eventDate) ?></time>
+                </div>
+                <p class="lead-timeline-event-actor">por <?= htmlspecialchars($eventActor) ?></p>
+                <?php if ($eventDescription !== ''): ?>
+                  <p class="lead-timeline-event-description"><?= htmlspecialchars($eventDescription) ?></p>
+                <?php endif; ?>
+              </div>
+            </li>
+          <?php endforeach; ?>
+        </ol>
+      </div>
+      <?php endif; ?>
     </section>
   </div>
 </div>

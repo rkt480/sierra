@@ -30,6 +30,7 @@ if (!is_array($lead)) {
 
 $canManageSales = crm_current_user_can_manage_sales();
 $canManageSettings = crm_current_user_is_admin();
+$canViewTimeline = $canManageSales;
 $assignableUsers = $canManageSales ? crm_read_assignable_users(false) : [];
 $followupFlows = crm_read_followup_flows(true);
 $googleCalendarConnected = crm_google_calendar_is_connected();
@@ -43,6 +44,7 @@ foreach ($kanbanColumns as $column) {
 $status = (string) ($lead['status'] ?? 'novo');
 $leadTags = crm_decode_lead_tags($lead);
 $visibleLeadTags = lead_visible_tags($lead, $leadTags);
+$leadTimeline = $canViewTimeline ? crm_read_lead_timeline($lead) : [];
 
 header('Content-Type: text/html; charset=utf-8');
 require dirname(__DIR__) . '/lead-details.php';

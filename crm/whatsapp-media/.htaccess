@@ -3,7 +3,17 @@ Options -Indexes
 # Pilot Status downloads the media from this folder before uploading it to
 # WhatsApp. Some hosting configurations serve unknown extensions as
 # application/octet-stream, which Meta rejects for audio messages.
-AddType audio/mp4 .mp4 .m4a
+AddType audio/mp4 .m4a
+AddType video/mp4 .mp4 .m4v
+AddType video/3gpp .3gp .3g2
+AddType video/quicktime .mov
+AddType video/webm .webm
+AddType video/x-matroska .mkv
+AddType video/x-msvideo .avi
+AddType video/x-ms-wmv .wmv
+AddType video/mpeg .mpe .mpeg .mpg .vob
+AddType video/mp2t .m2ts .mts .ts
+AddType video/ogg .ogv
 AddType audio/ogg .ogg .opus
 AddType audio/mpeg .mp3
 AddType audio/aac .aac

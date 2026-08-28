@@ -140,7 +140,7 @@ foreach ($filteredLeads as $lead) {
     <title>CRM Sierra</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" sizes="180x180" href="./assets/icon-180.png?v=20260819-sierra-icon-v1" />
-    <link rel="stylesheet" href="./assets/crm.css?v=20260824-form-answers-v1" />
+    <link rel="stylesheet" href="./assets/crm.css?v=20260828-sierra-media-timeline-v1" />
   </head>
   <body class="leads-page">
     <div class="app-shell">
@@ -540,7 +540,7 @@ foreach ($filteredLeads as $lead) {
     </main>
       </div>
     </div>
-    <script src="./assets/crm.js?v=20260824-cache-refresh-v1"></script>
+    <script src="./assets/crm.js?v=20260828-sierra-media-timeline-v1"></script>
     <script src="./assets/crm-navigation.js?v=20260812-fast-navigation-v3"></script>
   </body>
 </html>

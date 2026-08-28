@@ -119,6 +119,30 @@ function whatsapp_page_time_label(string $date): string
     return date('d/m H:i', $timestamp);
 }
 
+function whatsapp_page_friendly_failure_message(string $error): string
+{
+    $normalized = strtolower(trim($error));
+
+    if (
+        str_contains($normalized, '131053')
+        || str_contains($normalized, 'media upload error')
+        || str_contains($normalized, 'videocodec=hevc')
+        || str_contains($normalized, 'hevc')
+    ) {
+        return 'Falha ao enviar o vídeo. O formato ou codec não é compatível com o WhatsApp.';
+    }
+
+    if (
+        str_contains($normalized, '16 mb')
+        || str_contains($normalized, '16mb')
+        || str_contains($normalized, 'media file size too big')
+    ) {
+        return 'Falha ao enviar o vídeo. O tamanho máximo permitido é 16 MB.';
+    }
+
+    return 'Falha ao enviar a mensagem. Tente novamente.';
+}
+
 function whatsapp_page_short_text(string $text, int $limit = 92): string
 {
     $text = trim(preg_replace('/\s+/', ' ', $text) ?? $text);
@@ -284,6 +308,29 @@ function whatsapp_page_message_id_from_text(string $text): string
     }
 
     return trim((string) $match[1]);
+}
+
+function whatsapp_page_delivery_label(array $lead, string $messageId, string $block = ''): string
+{
+    $notes = (string) ($lead['notes'] ?? '');
+    $messageId = trim($messageId);
+
+    if ($messageId !== '') {
+        foreach ([
+            'message.failed' => 'Falhou',
+            'message.read' => 'Lida',
+            'message.delivered' => 'Entregue',
+            'message.sent' => 'Enviada',
+        ] as $event => $label) {
+            if (str_contains($notes, 'Pilot Status evento: ' . $event . ' | ID: ' . $messageId)) {
+                return $label;
+            }
+        }
+    }
+
+    return str_contains($block, 'Status inicial: aceito pela Pilot Status; aguardando confirmação de entrega.')
+        ? 'Aguardando'
+        : 'Enviada';
 }
 
 function whatsapp_page_infer_media_type_from_text(string $text): string
@@ -911,7 +958,7 @@ function whatsapp_page_messages_for_lead(array $lead): array
                         'at' => whatsapp_page_parse_br_datetime((string) $match[2]),
                         'text' => $caption !== '' ? $caption : whatsapp_page_sent_media_label($media),
                         'media' => $media,
-                        'label' => 'Enviada',
+                        'label' => whatsapp_page_delivery_label($lead, $blockMessageId, $block),
                         'message_id' => $blockMessageId !== ''
                             ? $blockMessageId
                             : trim((string) ($media['crm_message_id'] ?? ($media['message_id'] ?? ''))),
@@ -928,7 +975,7 @@ function whatsapp_page_messages_for_lead(array $lead): array
                     'provider' => whatsapp_page_message_provider($sentProviderLabel),
                     'at' => whatsapp_page_parse_br_datetime((string) $match[2]),
                     'text' => $sentText,
-                    'label' => 'Enviada',
+                    'label' => whatsapp_page_delivery_label($lead, $blockMessageId, $block),
                     'message_id' => $blockMessageId,
                 ];
 
@@ -957,8 +1004,7 @@ function whatsapp_page_messages_for_lead(array $lead): array
             }
 
             if (preg_match('/^Falha ao enviar via (.+?) em ([0-9]{2}\/[0-9]{2}\/[0-9]{4} [0-9]{2}:[0-9]{2}(?::[0-9]{2})?):\R(.+)$/su', $block, $match) === 1) {
-                $displayFailureText = preg_replace('/\bPilot Status\b|\bMeta Cloud API\b/iu', 'WhatsApp', $block) ?? $block;
-                $displayFailureText = preg_replace('/Falha ao enviar via WhatsApp/iu', 'Falha ao enviar mensagem', $displayFailureText) ?? $displayFailureText;
+                $displayFailureText = whatsapp_page_friendly_failure_message($block);
                 $messages[] = [
                     'direction' => 'note',
                     'provider' => whatsapp_page_message_provider((string) $match[1]),
@@ -1398,7 +1444,7 @@ if ($isWaConversationFragment) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="csrf-token" content="<?= htmlspecialchars($csrfToken) ?>" />
     <title>WhatsApp | Sierra</title>
-    <link rel="stylesheet" href="./assets/crm.css?v=20260824-form-answers-v1" />
+    <link rel="stylesheet" href="./assets/crm.css?v=20260828-sierra-media-timeline-v1" />
   </head>
   <body class="whatsapp-page whatsapp-crm-page" data-wa-initial-view="<?= is_array($activeLead) ? 'thread' : 'inbox' ?>" data-wa-mobile-view="<?= is_array($activeLead) ? 'thread' : 'inbox' ?>" data-wa-active-lead-id="<?= htmlspecialchars((string) ($activeLead['id'] ?? '')) ?>" data-wa-incoming-signature="<?= htmlspecialchars(is_array($activeLead) ? crm_whatsapp_incoming_signature($activeLead) : '') ?>" data-wa-lead-feed-version="<?= htmlspecialchars($leadFeedVersion) ?>">
     <main class="wa-web-shell" aria-label="Atendimento WhatsApp do CRM">
@@ -1548,6 +1594,10 @@ if ($isWaConversationFragment) {
             </div>
           </header>
 
+          <?php if ((string) ($activeLead['whatsapp_status'] ?? '') === 'falhou' && trim((string) ($activeLead['whatsapp_error'] ?? '')) !== ''): ?>
+            <div class="wa-toast"><?= htmlspecialchars(whatsapp_page_friendly_failure_message((string) $activeLead['whatsapp_error'])) ?></div>
+          <?php endif; ?>
+
           <div class="wa-message-surface">
             <div class="wa-day-chip">Histórico do CRM</div>
 
@@ -1604,11 +1654,11 @@ if ($isWaConversationFragment) {
 
             <form class="wa-composer <?= $wa24hOpen ? '' : 'is-locked' ?>" method="post" action="send-chat-message.php" enctype="multipart/form-data" data-wa-composer <?= $wa24hOpen ? '' : 'aria-disabled="true"' ?> <?= $wa24hOpen ? '' : 'hidden' ?>>
             <div class="wa-composer-tools">
-              <button class="wa-tool-button" type="button" title="Anexar imagem, áudio ou documento" data-wa-attach aria-label="Anexar imagem, áudio ou documento">
+              <label class="wa-tool-button" for="wa-media-input" title="Anexar imagem, áudio, vídeo ou documento" data-wa-attach aria-label="Anexar imagem, áudio, vídeo ou documento" tabindex="0">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M12 5v14M5 12h14" />
                 </svg>
-              </button>
+              </label>
               <button class="wa-tool-button" type="button" title="Inserir emoji" data-wa-emoji aria-label="Inserir emoji">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <circle cx="12" cy="12" r="8.5" />
@@ -1623,7 +1673,7 @@ if ($isWaConversationFragment) {
                 <button type="button" data-wa-emoji-value="❤️">❤️</button>
                 <button type="button" data-wa-emoji-value="🙏">🙏</button>
               </div>
-              <input class="wa-media-input" type="file" name="media" accept="image/jpeg,image/png,image/webp,image/gif,audio/*,application/pdf,application/msword,application/rtf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/plain,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" data-wa-media hidden />
+              <input id="wa-media-input" class="wa-media-input" type="file" name="media" accept="image/jpeg,image/png,image/webp,image/gif,audio/*,video/*,application/pdf,application/msword,application/rtf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/plain,.mp4,.m4v,.3gp,.3g2,.mov,.webm,.mkv,.avi,.wmv,.flv,.mpeg,.mpg,.ogv,.m2ts,.mts,.ts,.vob,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" data-wa-media hidden />
             </div>
             <input type="hidden" name="_csrf_token" value="<?= htmlspecialchars($csrfToken) ?>" />
             <input type="hidden" name="lead_id" value="<?= htmlspecialchars((string) ($activeLead['id'] ?? '')) ?>" />
@@ -2366,10 +2416,61 @@ if ($isWaConversationFragment) {
       // atualização da conversa usa a escuta de evento abaixo, que funciona
       // mesmo quando as notificações do navegador não estão habilitadas.
       if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("./sw.js?v=20260824-cache-refresh-v1", {
+        const waPushCsrfToken = document.querySelector("meta[name='csrf-token']")?.content || "";
+
+        const syncWaPushSubscription = async (subscriptionOverride = null) => {
+          if (!waPushCsrfToken || !window.isSecureContext || !("PushManager" in window)) {
+            return;
+          }
+
+          const permission = window.Notification?.permission || "default";
+
+          if (permission !== "granted") {
+            return;
+          }
+
+          const registration = await navigator.serviceWorker.ready;
+          const subscription = subscriptionOverride || await registration.pushManager.getSubscription();
+          const json = typeof subscription?.toJSON === "function" ? subscription.toJSON() : subscription;
+
+          if (!json?.endpoint || !json?.keys) {
+            return;
+          }
+
+          const response = await fetch("./api/push.php?action=subscribe", {
+            method: "POST",
+            headers: {
+              Accept: "application/json",
+              "Content-Type": "application/json",
+              "X-CSRF-Token": waPushCsrfToken,
+            },
+            body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
+            cache: "no-store",
+          });
+
+          if (!response.ok) {
+            throw new Error("Não foi possível sincronizar as notificações.");
+          }
+        };
+
+        navigator.serviceWorker.addEventListener("message", (event) => {
+          if (event.data?.type === "crm-push-subscription-changed") {
+            syncWaPushSubscription(event.data.subscription).catch(() => {});
+          }
+        });
+
+        window.addEventListener("online", () => syncWaPushSubscription().catch(() => {}));
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") {
+            syncWaPushSubscription().catch(() => {});
+          }
+        });
+        window.setInterval(() => syncWaPushSubscription().catch(() => {}), 5 * 60 * 1000);
+
+        navigator.serviceWorker.register("./sw.js?v=20260828-sierra-media-timeline-v1", {
           scope: "./",
           updateViaCache: "none",
-        }).catch(() => {});
+        }).then(() => syncWaPushSubscription()).catch(() => {});
       }
 
       let waIncomingListenerGeneration = 0;
@@ -2439,6 +2540,59 @@ if ($isWaConversationFragment) {
         let recordingStartedAt = 0;
         let recordingTimer = null;
         let discardCurrentRecording = false;
+        const emojiMenuParent = emojiMenu?.parentNode || null;
+        const emojiMenuNextSibling = emojiMenu?.nextSibling || null;
+
+        const restoreEmojiMenu = () => {
+          if (!emojiMenu || !emojiMenuParent) {
+            return;
+          }
+
+          if (emojiMenuNextSibling?.parentNode === emojiMenuParent) {
+            emojiMenuParent.insertBefore(emojiMenu, emojiMenuNextSibling);
+            return;
+          }
+
+          emojiMenuParent.appendChild(emojiMenu);
+        };
+
+        const positionEmojiMenu = () => {
+          if (!emojiButton || !emojiMenu || emojiMenu.hidden) {
+            return;
+          }
+
+          const buttonRect = emojiButton.getBoundingClientRect();
+          const menuRect = emojiMenu.getBoundingClientRect();
+          const margin = 8;
+          const maxLeft = Math.max(margin, window.innerWidth - menuRect.width - margin);
+          const preferredTop = buttonRect.top - menuRect.height - 6;
+          const fallbackTop = buttonRect.bottom + 6;
+          const maxTop = Math.max(margin, window.innerHeight - menuRect.height - margin);
+          const top = preferredTop >= margin ? preferredTop : Math.min(fallbackTop, maxTop);
+
+          emojiMenu.style.left = `${Math.min(Math.max(margin, buttonRect.left), maxLeft)}px`;
+          emojiMenu.style.top = `${Math.min(Math.max(margin, top), maxTop)}px`;
+          emojiMenu.style.bottom = "auto";
+        };
+
+        const setEmojiMenuVisibility = (open) => {
+          if (!emojiMenu) {
+            return;
+          }
+
+          if (open) {
+            document.body.appendChild(emojiMenu);
+            emojiMenu.hidden = false;
+            positionEmojiMenu();
+            window.requestAnimationFrame(positionEmojiMenu);
+          } else {
+            emojiMenu.hidden = true;
+            emojiMenu.style.removeProperty("left");
+            emojiMenu.style.removeProperty("top");
+            emojiMenu.style.removeProperty("bottom");
+            restoreEmojiMenu();
+          }
+        };
 
         const concatAudioBytes = (parts) => {
           const length = parts.reduce((total, part) => total + part.length, 0);
@@ -2780,21 +2934,39 @@ if ($isWaConversationFragment) {
           }
 
           previewUrl = URL.createObjectURL(file);
+          const extension = String(file.name || "").split(".").pop().toLowerCase();
+          const supportedVideoExtensions = new Set(["mp4", "m4v", "3gp", "mov"]);
+          const documentVideoExtensions = new Set(["avi", "flv", "m2ts", "mkv", "mpe", "mpeg", "mpg", "mts", "ogv", "ts", "vob", "webm", "wmv"]);
           const isImage = file.type.startsWith("image/");
           const isAudio = file.type.startsWith("audio/");
+          const isVideo = file.type.startsWith("video/") || documentVideoExtensions.has(extension) || supportedVideoExtensions.has(extension);
+          const exceedsVideoMessageLimit = file.size > 16 * 1024 * 1024;
+          const isVideoDocument = isVideo && (documentVideoExtensions.has(extension) || exceedsVideoMessageLimit || (!supportedVideoExtensions.has(extension) && !["video/mp4", "video/3gpp"].includes(file.type)));
           const label = document.createElement("span");
-          label.textContent = isImage ? "Imagem selecionada" : (isAudio ? "Áudio selecionado" : "Documento selecionado");
+          label.textContent = isImage
+            ? "Imagem selecionada"
+            : (isAudio
+              ? "Áudio selecionado"
+              : (exceedsVideoMessageLimit
+                ? "Vídeo excede o limite de 16 MB"
+                : (isVideoDocument
+                  ? "Vídeo será enviado como documento"
+                  : (isVideo ? "Vídeo selecionado" : "Documento selecionado"))));
+          label.title = label.textContent;
           preview.appendChild(label);
 
-          if (isImage || isAudio) {
-            const media = document.createElement(isImage ? "img" : "audio");
+          if (isImage || isAudio || (isVideo && !isVideoDocument)) {
+            const media = document.createElement(isImage ? "img" : (isAudio ? "audio" : "video"));
             media.src = previewUrl;
-            media.controls = isAudio;
+            media.controls = !isImage;
+            media.muted = isVideo;
+            media.playsInline = isVideo;
             media.alt = file.name;
             preview.appendChild(media);
           } else {
             const fileName = document.createElement("strong");
             fileName.textContent = file.name;
+            fileName.title = file.name;
             preview.appendChild(fileName);
           }
 
@@ -2810,9 +2982,14 @@ if ($isWaConversationFragment) {
           syncComposerAction();
         };
 
-        attachButton?.addEventListener("click", () => mediaInput?.click());
+        attachButton?.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            mediaInput?.click();
+          }
+        });
         emojiButton?.addEventListener("click", () => {
-          emojiMenu.hidden = !emojiMenu.hidden;
+          setEmojiMenuVisibility(emojiMenu.hidden);
         });
         emojiMenu?.querySelectorAll("[data-wa-emoji-value]").forEach((button) => {
           button.addEventListener("click", () => {
@@ -2822,7 +2999,7 @@ if ($isWaConversationFragment) {
             messageInput.value = messageInput.value.slice(0, start) + emoji + messageInput.value.slice(end);
             messageInput.focus();
             messageInput.selectionStart = messageInput.selectionEnd = start + emoji.length;
-            emojiMenu.hidden = true;
+            setEmojiMenuVisibility(false);
             syncComposerAction();
           });
         });
@@ -2900,7 +3077,7 @@ if ($isWaConversationFragment) {
           }
 
           if (!navigator.mediaDevices?.getUserMedia || (!window.MediaRecorder && !window.OpusMediaRecorder)) {
-            window.alert("Seu navegador não permite gravar áudio. Selecione um arquivo de áudio.");
+            window.alert("Seu navegador não permite gravar áudio. Selecione um arquivo de áudio ou vídeo.");
             return;
           }
 
@@ -2987,7 +3164,7 @@ if ($isWaConversationFragment) {
         form.addEventListener("submit", (event) => {
           if (!messageInput.value.trim() && !mediaInput.files?.length) {
             event.preventDefault();
-            window.alert("Digite uma mensagem ou selecione uma imagem/áudio.");
+            window.alert("Digite uma mensagem ou selecione uma imagem, áudio, vídeo ou documento.");
             return;
           }
 

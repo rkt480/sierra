@@ -40,7 +40,7 @@ $media = $_FILES['media'] ?? null;
 $hasMedia = is_array($media) && (int) ($media['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE;
 
 if ($message === '' && !$hasMedia) {
-    header('Location: ' . $redirect . '&send_error=' . rawurlencode('Digite uma mensagem ou selecione uma imagem/áudio.'));
+    header('Location: ' . $redirect . '&send_error=' . rawurlencode('Digite uma mensagem ou selecione uma imagem, áudio, vídeo ou documento.'));
     exit;
 }
 
@@ -73,6 +73,11 @@ $fileName = '';
 if ($hasMedia) {
     $uploadError = (int) ($media['error'] ?? UPLOAD_ERR_NO_FILE);
 
+    if (in_array($uploadError, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)) {
+        header('Location: ' . $redirect . '&send_error=' . rawurlencode('O servidor recusou o arquivo por exceder o limite de upload. Aumente upload_max_filesize e post_max_size para permitir vídeos maiores como documento.'));
+        exit;
+    }
+
     if ($uploadError !== UPLOAD_ERR_OK || !is_uploaded_file((string) ($media['tmp_name'] ?? ''))) {
         header('Location: ' . $redirect . '&send_error=' . rawurlencode('Não foi possível ler o arquivo selecionado.'));
         exit;
@@ -80,8 +85,8 @@ if ($hasMedia) {
 
     $fileSize = (int) ($media['size'] ?? 0);
 
-    if ($fileSize < 1 || $fileSize > 16 * 1024 * 1024) {
-        header('Location: ' . $redirect . '&send_error=' . rawurlencode('O arquivo deve ter entre 1 byte e 16 MB.'));
+    if ($fileSize < 1) {
+        header('Location: ' . $redirect . '&send_error=' . rawurlencode('O arquivo deve ter ao menos 1 byte.'));
         exit;
     }
 
@@ -95,7 +100,12 @@ if ($hasMedia) {
     $fileName = preg_replace('/[^A-Za-z0-9._-]+/', '_', basename((string) ($media['name'] ?? ''))) ?? '';
     $fileName = trim($fileName, '._-') ?: 'documento';
     $imageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    $audioTypes = ['audio/aac', 'audio/amr', 'audio/m4a', 'audio/x-m4a', 'audio/mp4', 'audio/mpeg', 'audio/ogg', 'audio/opus', 'audio/webm', 'video/webm', 'audio/wav', 'audio/x-wav'];
+    $audioTypes = ['audio/aac', 'audio/amr', 'audio/m4a', 'audio/x-m4a', 'audio/mp4', 'audio/mpeg', 'audio/ogg', 'audio/opus', 'audio/webm', 'audio/wav', 'audio/x-wav'];
+    $videoTypes = ['video/mp4', 'video/3gpp', 'video/quicktime'];
+    $videoDocumentExtensions = [
+        '3g2', 'avi', 'flv', 'm2ts', 'mkv', 'mpe', 'mpeg', 'mpg',
+        'mts', 'ogv', 'ts', 'vob', 'webm', 'wmv',
+    ];
     $audioMimeByExtension = [
         'aac' => 'audio/aac',
         'amr' => 'audio/amr',
@@ -105,6 +115,26 @@ if ($hasMedia) {
         'opus' => 'audio/opus',
         'wav' => 'audio/wav',
         'webm' => 'audio/webm',
+    ];
+    $videoMimeByExtension = [
+        'mp4' => 'video/mp4',
+        'm4v' => 'video/mp4',
+        '3gp' => 'video/3gpp',
+        '3g2' => 'video/3gpp',
+        'mov' => 'video/quicktime',
+        'webm' => 'video/webm',
+        'avi' => 'video/x-msvideo',
+        'flv' => 'video/x-flv',
+        'm2ts' => 'video/mp2t',
+        'mkv' => 'video/x-matroska',
+        'mpe' => 'video/mpeg',
+        'mpeg' => 'video/mpeg',
+        'mpg' => 'video/mpeg',
+        'mts' => 'video/mp2t',
+        'ogv' => 'video/ogg',
+        'ts' => 'video/mp2t',
+        'vob' => 'video/mpeg',
+        'wmv' => 'video/x-ms-wmv',
     ];
     $documentTypes = [
         'application/pdf',
@@ -124,20 +154,49 @@ if ($hasMedia) {
     // Accept this only for a known audio extension and a matching upload MIME.
     $uploadMimeType = strtolower(trim(explode(';', (string) ($media['type'] ?? ''))[0]));
     $extension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
-    $isBrowserAudioUpload = str_starts_with($uploadMimeType, 'audio/') || $uploadMimeType === 'video/webm';
+    $isBrowserAudioUpload = str_starts_with($uploadMimeType, 'audio/')
+        || ($uploadMimeType === 'video/webm' && str_starts_with(strtolower(pathinfo($fileName, PATHINFO_FILENAME)), 'audio-whatsapp'));
+    $isBrowserVideoUpload = str_starts_with($uploadMimeType, 'video/');
 
     if (!in_array($mimeType, $audioTypes, true) && $isBrowserAudioUpload && isset($audioMimeByExtension[$extension])) {
         $mimeType = $audioMimeByExtension[$extension];
     }
 
+    if (
+        !in_array($mimeType, $videoTypes, true)
+        && isset($videoMimeByExtension[$extension])
+        && ($isBrowserVideoUpload || in_array($extension, $videoDocumentExtensions, true))
+    ) {
+        $mimeType = $videoMimeByExtension[$extension];
+    }
+
+    $isVideoDocument = in_array($extension, $videoDocumentExtensions, true);
+
     if (in_array($mimeType, $imageTypes, true)) {
         $mediaType = 'image';
     } elseif (in_array($mimeType, $audioTypes, true)) {
         $mediaType = 'audio';
+    } elseif (in_array($mimeType, $videoTypes, true) && !$isVideoDocument) {
+        $mediaType = 'video';
+    } elseif ($isVideoDocument || str_starts_with($mimeType, 'video/')) {
+        $mediaType = 'document';
     } elseif (in_array($mimeType, $documentTypes, true)) {
         $mediaType = 'document';
     } else {
-        header('Location: ' . $redirect . '&send_error=' . rawurlencode('Envie uma imagem, áudio ou documento compatível, como PDF, DOCX, XLSX, TXT ou CSV.'));
+        header('Location: ' . $redirect . '&send_error=' . rawurlencode('Envie uma imagem, áudio, vídeo MP4/3GP/MOV ou documento compatível.'));
+        exit;
+    }
+
+    $isVideoFile = $mediaType === 'video'
+        || $isVideoDocument
+        || str_starts_with($mimeType, 'video/');
+    $maxFileSize = $isVideoFile ? 16 * 1024 * 1024 : 100 * 1024 * 1024;
+
+    if ($fileSize > $maxFileSize) {
+        $message = $isVideoFile
+            ? 'O vídeo excede o limite de 16 MB do WhatsApp. Reduza a duração ou a qualidade do vídeo e tente novamente.'
+            : 'O arquivo excede o limite de 100 MB.';
+        header('Location: ' . $redirect . '&send_error=' . rawurlencode($message));
         exit;
     }
 
@@ -195,6 +254,22 @@ if (($result['ok'] ?? false) === true) {
         ($hasMedia ? 'Mídia enviada via ' : 'Mensagem enviada via ') . $providerLabel . ' em ' . date('d/m/Y H:i:s') . ":\n" . $sentDescription
     );
     crm_update_whatsapp_status($leadId, $pilotStatusQueued ? 'aguardando' : 'enviado');
+
+    if ((string) ($lead['first_contact_at'] ?? '') === '') {
+        crm_record_lead_timeline_event(
+            $leadId,
+            'first_contact',
+            'Atendimento iniciado',
+            'Primeiro contato enviado pelo WhatsApp.'
+        );
+    }
+
+    crm_record_lead_timeline_event(
+        $leadId,
+        $hasMedia ? 'whatsapp_media_sent' : 'whatsapp_message_sent',
+        $hasMedia ? 'Mídia enviada pelo WhatsApp' : 'Mensagem enviada pelo WhatsApp',
+        'Envio realizado via ' . $providerLabel . '.'
+    );
     header('Location: ' . $redirect . '&sent=1');
     exit;
 }
@@ -203,6 +278,12 @@ $error = 'Falha ao enviar via ' . $providerLabel . ': ' . (string) ($result['err
 crm_append_lead_note(
     $leadId,
     'Falha ao enviar via ' . $providerLabel . ' em ' . date('d/m/Y H:i:s') . ":\n" . $error
+);
+crm_record_lead_timeline_event(
+    $leadId,
+    'whatsapp_message_failed',
+    'Falha ao enviar mensagem pelo WhatsApp',
+    'Tentativa via ' . $providerLabel . '. ' . $error
 );
 
 header('Location: ' . $redirect . '&send_error=' . rawurlencode($error));

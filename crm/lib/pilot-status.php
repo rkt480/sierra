@@ -155,6 +155,53 @@ function pilot_status_log(string $message, array $context = []): void
     @file_put_contents($dir . '/pilot-status.log', $line . PHP_EOL, FILE_APPEND | LOCK_EX);
 }
 
+function pilot_status_format_api_error(mixed $decoded, string $body): string
+{
+    if (!is_array($decoded)) {
+        return trim(is_scalar($decoded) ? (string) $decoded : $body);
+    }
+
+    $parts = [];
+
+    foreach (['error', 'message', 'errorMessage', 'reason', 'detail'] as $key) {
+        if (!array_key_exists($key, $decoded)) {
+            continue;
+        }
+
+        $value = $decoded[$key];
+
+        if (is_scalar($value) && trim((string) $value) !== '') {
+            $parts[] = trim((string) $value);
+        } elseif (is_array($value) && $value !== []) {
+            $encoded = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+            if (is_string($encoded) && $encoded !== '') {
+                $parts[] = $key . ': ' . $encoded;
+            }
+        }
+    }
+
+    foreach (['issues', 'errors', 'details', 'validationErrors', 'validation_errors'] as $key) {
+        if (!is_array($decoded[$key] ?? null) || $decoded[$key] === []) {
+            continue;
+        }
+
+        $encoded = json_encode($decoded[$key], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        if (is_string($encoded) && $encoded !== '') {
+            $parts[] = $key . ': ' . $encoded;
+        }
+    }
+
+    if ($parts !== []) {
+        return implode(' | ', array_values(array_unique($parts)));
+    }
+
+    $encoded = json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+    return is_string($encoded) && $encoded !== '' ? $encoded : trim($body);
+}
+
 function pilot_status_api_request(string $endpoint, string $method = 'GET', ?array $payload = null, int $timeout = 20): array
 {
     $settings = pilot_status_settings();
@@ -213,9 +260,7 @@ function pilot_status_api_request(string $endpoint, string $method = 'GET', ?arr
             'response' => $decoded,
         ]);
 
-        $rawError = is_array($decoded) && isset($decoded['error']) && is_scalar($decoded['error'])
-            ? (string) $decoded['error']
-            : (is_scalar($decoded) ? (string) $decoded : $body);
+        $rawError = pilot_status_format_api_error($decoded, $body);
 
         if (
             str_contains($rawError, '2388293')
@@ -235,6 +280,39 @@ function pilot_status_api_request(string $endpoint, string $method = 'GET', ?arr
             'error' => 'Pilot Status HTTP ' . $httpCode . ': ' . ($rawError !== '' ? $rawError : 'resposta inválida.'),
             'response' => $decoded,
         ];
+    }
+
+    if (is_array($decoded)) {
+        $explicitFailure = ($decoded['ok'] ?? null) === false
+            || ($decoded['success'] ?? null) === false;
+        $responseStatus = strtolower(trim((string) ($decoded['status'] ?? '')));
+        $explicitFailure = $explicitFailure
+            || in_array($responseStatus, ['error', 'failed', 'failure', 'rejected'], true);
+        $responseError = '';
+
+        foreach (['error', 'errorMessage', 'message', 'reason'] as $key) {
+            if (is_scalar($decoded[$key] ?? null) && trim((string) $decoded[$key]) !== '') {
+                $candidate = trim((string) $decoded[$key]);
+
+                if ($key !== 'message' || $explicitFailure) {
+                    $responseError = $candidate;
+                    break;
+                }
+            }
+        }
+
+        if ($explicitFailure || $responseError !== '') {
+            pilot_status_log('Pilot Status retornou falha no corpo da resposta.', [
+                'endpoint' => $endpoint,
+                'response' => $decoded,
+            ]);
+
+            return [
+                'ok' => false,
+                'error' => 'Pilot Status recusou a mensagem: ' . ($responseError !== '' ? $responseError : 'resposta marcada como falha.'),
+                'response' => $decoded,
+            ];
+        }
     }
 
     return ['ok' => true, 'response' => is_array($decoded) ? $decoded : $body];
@@ -474,11 +552,13 @@ function pilot_status_send_template(string $number, array $template, array $vari
 
 function pilot_status_extract_delivery_event(array $payload): array
 {
-    $event = strtolower(trim((string) ($payload['event'] ?? '')));
+    $event = strtolower(trim((string) pilot_status_first_payload_value($payload, [
+        ['event'], ['eventType'], ['type'], ['data', 'event'], ['data', 'eventType'], ['data', 'type'],
+    ])));
     $deliveryEvents = ['message.sent', 'message.delivered', 'message.read', 'message.failed'];
 
     if (in_array($event, $deliveryEvents, true)) {
-        $data = is_array($payload['data'] ?? null) ? $payload['data'] : [];
+        $data = is_array($payload['data'] ?? null) ? $payload['data'] : $payload;
         $messageId = '';
 
         foreach (['id', 'internalMessageId', 'message_id', 'messageId'] as $key) {
@@ -486,6 +566,12 @@ function pilot_status_extract_delivery_event(array $payload): array
                 $messageId = trim((string) $data[$key]);
                 break;
             }
+        }
+
+        if ($messageId === '') {
+            $messageId = trim((string) pilot_status_first_payload_value($data, [
+                ['message', 'id'], ['message', 'messageId'], ['key', 'id'],
+            ]));
         }
 
         if ($messageId === '' && is_scalar($payload['id'] ?? null)) {
@@ -500,10 +586,22 @@ function pilot_status_extract_delivery_event(array $payload): array
             }
         }
 
+        $errorDetails = is_array($data['error'] ?? null) ? $data['error'] : [];
+
+        foreach (['message', 'title', 'details'] as $key) {
+            if (is_scalar($errorDetails[$key] ?? null) && trim((string) $errorDetails[$key]) !== '') {
+                $errorParts[] = trim((string) $errorDetails[$key]);
+            }
+        }
+
+        $destination = trim((string) pilot_status_first_payload_value($data, [
+            ['destinationNumber'], ['destination_number'], ['recipient_id'], ['recipient'], ['to'], ['phoneNumber'], ['phone_number'],
+        ]));
+
         return [
             'event' => $event,
             'id' => $messageId,
-            'destination' => '',
+            'destination' => $destination,
             'error' => implode(' | ', array_values(array_unique($errorParts))),
         ];
     }
@@ -586,7 +684,23 @@ function pilot_status_public_media_directory(): string
 
 function pilot_status_public_crm_base_url(): string
 {
-    $host = trim((string) ($_SERVER['HTTP_HOST'] ?? ''));
+    $config = function_exists('crm_config') ? crm_config() : [];
+    $configuredBaseUrl = trim((string) ($config['app_url'] ?? ''));
+    $configuredParts = $configuredBaseUrl !== '' ? parse_url($configuredBaseUrl) : false;
+
+    if (
+        is_array($configuredParts)
+        && in_array(strtolower((string) ($configuredParts['scheme'] ?? '')), ['http', 'https'], true)
+        && trim((string) ($configuredParts['host'] ?? '')) !== ''
+    ) {
+        return rtrim($configuredBaseUrl, '/');
+    }
+
+    $host = trim((string) ($_SERVER['HTTP_X_FORWARDED_HOST'] ?? $_SERVER['HTTP_HOST'] ?? ''));
+
+    if (str_contains($host, ',')) {
+        $host = trim(explode(',', $host, 2)[0]);
+    }
 
     if ($host === '') {
         return '';
@@ -605,6 +719,23 @@ function pilot_status_public_crm_base_url(): string
     }
 
     return $scheme . '://' . $host . $scriptDirectory;
+}
+
+function pilot_status_media_url_is_public(string $baseUrl): bool
+{
+    $parts = parse_url($baseUrl);
+    $host = strtolower(trim((string) ($parts['host'] ?? '')));
+
+    if ($host === '' || in_array($host, ['localhost', '127.0.0.1', '::1'], true)) {
+        return false;
+    }
+
+    if (str_ends_with($host, '.local') || str_ends_with($host, '.test')) {
+        return false;
+    }
+
+    return filter_var($host, FILTER_VALIDATE_IP) === false
+        || filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) !== false;
 }
 
 function pilot_status_public_media_base_url(): string
@@ -807,7 +938,7 @@ function pilot_status_media_extension(string $mimeType, string $fileName): strin
     // browser-provided filename, so the web server and the remote fetcher
     // agree on the MIME type.
     if (in_array($mimeType, ['audio/mp4', 'audio/m4a', 'audio/x-m4a'], true)) {
-        return 'mp4';
+        return 'm4a';
     }
 
     if (in_array($mimeType, ['audio/ogg', 'audio/opus'], true)) {
@@ -825,10 +956,14 @@ function pilot_status_media_extension(string $mimeType, string $fileName): strin
         'image/png' => 'png',
         'image/webp' => 'webp',
         'image/gif' => 'gif',
+        'video/mp4' => 'mp4',
+        'video/3gpp' => '3gp',
+        'video/quicktime' => 'mov',
+        'video/webm' => 'webm',
         'audio/ogg' => 'ogg',
-        'audio/webm', 'video/webm' => 'webm',
+        'audio/webm' => 'webm',
         'audio/mpeg' => 'mp3',
-        'audio/mp4', 'audio/m4a', 'audio/x-m4a' => 'mp4',
+        'audio/mp4', 'audio/m4a', 'audio/x-m4a' => 'm4a',
         'audio/wav', 'audio/x-wav' => 'wav',
         'application/pdf' => 'pdf',
         'application/msword' => 'doc',
@@ -877,6 +1012,13 @@ function pilot_status_publish_media(string $filePath, string $mimeType, string $
         return ['ok' => false, 'error' => 'Não foi possível gerar uma URL pública para o arquivo.'];
     }
 
+    if (!pilot_status_media_url_is_public($baseUrl)) {
+        return [
+            'ok' => false,
+            'error' => 'A mídia não pode ser enviada enquanto o CRM estiver usando localhost ou um endereço interno. Configure app_url com a URL pública do CRM (por exemplo, https://seudominio.com/crm).',
+        ];
+    }
+
     $directory = pilot_status_public_media_directory();
 
     if (!is_dir($directory) && !@mkdir($directory, 0755, true) && !is_dir($directory)) {
@@ -896,6 +1038,17 @@ function pilot_status_publish_media(string $filePath, string $mimeType, string $
     return ['ok' => true, 'url' => rtrim($baseUrl, '/') . '/' . rawurlencode($storedName)];
 }
 
+function pilot_status_document_transport_mime(string $mimeType, string $mediaType): string
+{
+    $normalizedMimeType = pilot_status_normalize_media_mime_type($mimeType);
+
+    if ($mediaType === 'document' && str_starts_with($normalizedMimeType, 'video/')) {
+        return 'application/octet-stream';
+    }
+
+    return $normalizedMimeType ?: 'application/octet-stream';
+}
+
 function pilot_status_send_media(
     string $number,
     string $filePath,
@@ -910,7 +1063,7 @@ function pilot_status_send_media(
         return ['ok' => false, 'error' => 'WhatsApp inválido.'];
     }
 
-    if (!in_array($mediaType, ['image', 'audio', 'document'], true)) {
+    if (!in_array($mediaType, ['image', 'audio', 'video', 'document'], true)) {
         return ['ok' => false, 'error' => 'Tipo de mídia não suportado.'];
     }
 
@@ -924,8 +1077,12 @@ function pilot_status_send_media(
         return ['ok' => false, 'error' => 'Não foi possível ler o arquivo de mídia.'];
     }
 
+    $originalMimeType = pilot_status_normalize_media_mime_type($mimeType);
+    $transportMimeType = pilot_status_document_transport_mime($mimeType, $mediaType);
+    $isVideoDocument = $mediaType === 'document' && str_starts_with($originalMimeType, 'video/');
+
     pilot_status_cleanup_public_media();
-    $published = pilot_status_publish_media($filePath, $mimeType, $fileName);
+    $published = pilot_status_publish_media($filePath, $transportMimeType, $isVideoDocument ? '' : $fileName);
 
     if (($published['ok'] ?? false) !== true) {
         return $published;
@@ -941,7 +1098,23 @@ function pilot_status_send_media(
         $payload['caption'] = trim($caption);
     }
 
-    return pilot_status_request('/messages/send', $payload, 60);
+    $result = pilot_status_request('/messages/send', $payload, 60);
+
+    pilot_status_log('Mídia enviada para processamento na Pilot Status.', [
+        'destination' => $to,
+        'media_type' => $mediaType,
+        'mime_type' => $originalMimeType,
+        'transport_mime_type' => $transportMimeType,
+        'file_size' => $fileSize,
+        'media_url' => (string) ($published['url'] ?? ''),
+        'file_name' => trim($fileName),
+        'payload' => $payload,
+        'accepted' => ($result['ok'] ?? false) === true,
+        'response' => $result['response'] ?? null,
+        'error' => $result['error'] ?? null,
+    ]);
+
+    return $result;
 }
 
 function pilot_status_render_custom_message(string $message, array $lead): string

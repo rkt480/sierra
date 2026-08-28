@@ -34,7 +34,7 @@ if ($received !== []) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex,nofollow" />
     <title>Cadastro WhatsApp | Sierra</title>
-    <link rel="stylesheet" href="./assets/crm.css?v=20260824-form-answers-v1" />
+    <link rel="stylesheet" href="./assets/crm.css?v=20260828-sierra-media-timeline-v1" />
   </head>
   <body>
     <main class="workspace" style="min-height: 100vh; padding: 32px;">

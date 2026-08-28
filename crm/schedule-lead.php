@@ -126,6 +126,12 @@ if ($eventLink !== '') {
 }
 
 crm_append_lead_note($leadId, $note);
+crm_record_lead_timeline_event(
+    $leadId,
+    'appointment_scheduled',
+    'Agendamento criado',
+    $title . ' — ' . $start->format('d/m/Y H:i') . ' até ' . $end->format('H:i') . '.'
+);
 
 header('Location: ' . crm_redirect_with_query($redirectTarget, ['scheduled' => '1']));
 exit;

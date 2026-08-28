@@ -47,7 +47,7 @@ function crm_db(): PDO
 
 function crm_schema_version(): string
 {
-    return '20260821.1';
+    return '20260828.1';
 }
 
 function crm_schema_version_is_current(PDO $pdo): bool
@@ -264,6 +264,22 @@ function crm_ensure_crm_schema(PDO $pdo): void
             created_at DATETIME NOT NULL,
             INDEX idx_lead_assignment_logs_lead (lead_id, created_at),
             INDEX idx_lead_assignment_logs_to_user (to_user_id, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+    );
+
+    $pdo->exec(
+        'CREATE TABLE IF NOT EXISTS lead_timeline_events (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            lead_id VARCHAR(32) NOT NULL,
+            event_type VARCHAR(60) NOT NULL,
+            actor_user_id INT NULL,
+            actor_name VARCHAR(160) NOT NULL DEFAULT "Sistema",
+            title VARCHAR(255) NOT NULL,
+            description TEXT NULL,
+            metadata LONGTEXT NULL,
+            created_at DATETIME NOT NULL,
+            INDEX idx_lead_timeline_events_lead (lead_id, created_at),
+            INDEX idx_lead_timeline_events_type (event_type, created_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
     );
 
@@ -638,6 +654,15 @@ function crm_read_kanban_columns(bool $onlyActive = true): array
     $sql .= ' ORDER BY position ASC, created_at ASC';
 
     return crm_db()->query($sql)->fetchAll();
+}
+
+function crm_kanban_status_label(string $status): string
+{
+    $stmt = crm_db()->prepare('SELECT label FROM kanban_columns WHERE status = :status LIMIT 1');
+    $stmt->execute(['status' => $status]);
+    $label = trim((string) ($stmt->fetchColumn() ?: ''));
+
+    return $label !== '' ? $label : ucfirst(str_replace(['-', '_'], ' ', $status));
 }
 
 function crm_kanban_status_exists(string $status): bool
@@ -1173,6 +1198,194 @@ function crm_current_storage_user(): ?array
     return is_array($user) ? $user : null;
 }
 
+/** Registra uma ação relevante do lead para consulta administrativa. */
+function crm_record_lead_timeline_event(
+    string $leadId,
+    string $eventType,
+    string $title,
+    string $description = '',
+    ?string $actorName = null,
+    ?int $actorUserId = null,
+    array $metadata = []
+): void {
+    $leadId = trim($leadId);
+
+    if ($leadId === '' || trim($eventType) === '' || trim($title) === '') {
+        return;
+    }
+
+    if ($actorName === null) {
+        $actor = $actorUserId !== null && $actorUserId > 0
+            ? crm_find_user_by_id($actorUserId)
+            : crm_current_storage_user();
+
+        if (is_array($actor)) {
+            $actorUserId = (int) ($actor['id'] ?? 0) ?: null;
+            $actorName = crm_user_label($actor);
+        } else {
+            $actorUserId = null;
+            $actorName = 'Sistema';
+        }
+    }
+
+    $stmt = crm_db()->prepare(
+        'INSERT INTO lead_timeline_events
+        (lead_id, event_type, actor_user_id, actor_name, title, description, metadata, created_at)
+        VALUES
+        (:lead_id, :event_type, :actor_user_id, :actor_name, :title, :description, :metadata, :created_at)'
+    );
+    $stmt->execute([
+        'lead_id' => $leadId,
+        'event_type' => substr(trim($eventType), 0, 60),
+        'actor_user_id' => $actorUserId !== null && $actorUserId > 0 ? $actorUserId : null,
+        'actor_name' => substr(trim($actorName) ?: 'Sistema', 0, 160),
+        'title' => substr(trim($title), 0, 255),
+        'description' => trim($description) !== '' ? trim($description) : null,
+        'metadata' => $metadata === []
+            ? null
+            : (json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: null),
+        'created_at' => date('Y-m-d H:i:s'),
+    ]);
+}
+
+/** @return list<array<string, mixed>> */
+function crm_read_lead_timeline(array $lead): array
+{
+    $leadId = trim((string) ($lead['id'] ?? ''));
+
+    if ($leadId === '') {
+        return [];
+    }
+
+    $stmt = crm_db()->prepare(
+        'SELECT id, lead_id, event_type, actor_user_id, actor_name, title, description, metadata, created_at
+         FROM lead_timeline_events
+         WHERE lead_id = :lead_id
+         ORDER BY created_at DESC, id DESC'
+    );
+    $stmt->execute(['lead_id' => $leadId]);
+    $events = $stmt->fetchAll();
+    $eventKeys = [];
+
+    foreach ($events as $event) {
+        $eventKeys[(string) ($event['event_type'] ?? '') . '|' . (string) ($event['created_at'] ?? '')] = true;
+    }
+
+    // Inclui os dados existentes antes da implantação para que o histórico
+    // seja útil também para leads antigos, sem duplicar eventos novos.
+    $assignmentStmt = crm_db()->prepare(
+        'SELECT logs.*, creator.name AS creator_name, creator.username AS creator_username,
+                previous_owner.name AS from_name, previous_owner.username AS from_username,
+                next_owner.name AS to_name, next_owner.username AS to_username
+         FROM lead_assignment_logs logs
+         LEFT JOIN crm_users creator ON creator.id = logs.created_by_user_id
+         LEFT JOIN crm_users previous_owner ON previous_owner.id = logs.from_user_id
+         LEFT JOIN crm_users next_owner ON next_owner.id = logs.to_user_id
+         WHERE logs.lead_id = :lead_id
+         ORDER BY logs.created_at DESC, logs.id DESC'
+    );
+    $assignmentStmt->execute(['lead_id' => $leadId]);
+
+    foreach ($assignmentStmt->fetchAll() as $assignment) {
+        $createdAt = (string) ($assignment['created_at'] ?? '');
+        $key = 'lead_assignment|' . $createdAt;
+
+        if (isset($eventKeys[$key])) {
+            continue;
+        }
+
+        $from = trim((string) ($assignment['from_name'] ?? ''))
+            ?: (trim((string) ($assignment['from_username'] ?? '')) ?: 'sem responsável');
+        $to = trim((string) ($assignment['to_name'] ?? ''))
+            ?: (trim((string) ($assignment['to_username'] ?? '')) ?: 'sem responsável');
+        $actor = trim((string) ($assignment['creator_name'] ?? ''))
+            ?: (trim((string) ($assignment['creator_username'] ?? '')) ?: 'Sistema');
+        $events[] = [
+            'id' => 0,
+            'lead_id' => $leadId,
+            'event_type' => 'lead_assignment',
+            'actor_user_id' => $assignment['created_by_user_id'] ?? null,
+            'actor_name' => $actor,
+            'title' => (string) ($assignment['action'] ?? '') === 'rotation_assignment'
+                ? 'Lead distribuído automaticamente'
+                : 'Responsável atualizado',
+            'description' => $from . ' → ' . $to,
+            'metadata' => null,
+            'created_at' => $createdAt,
+        ];
+        $eventKeys[$key] = true;
+    }
+
+    $followupHistoryStmt = crm_db()->prepare(
+        'SELECT history.*, flows.name AS flow_name,
+                COALESCE(history.sent_at, history.updated_at, history.created_at) AS timeline_at
+         FROM followup_step_history history
+         LEFT JOIN followup_flows flows ON flows.id = history.flow_id
+         WHERE history.lead_id = :lead_id
+           AND history.status IN ("enviado", "falhou")
+         ORDER BY timeline_at DESC, history.id DESC'
+    );
+    $followupHistoryStmt->execute(['lead_id' => $leadId]);
+
+    foreach ($followupHistoryStmt->fetchAll() as $followup) {
+        $status = (string) ($followup['status'] ?? '');
+        $eventType = $status === 'enviado' ? 'followup_sent' : 'followup_failed';
+        $createdAt = (string) ($followup['timeline_at'] ?? '');
+        $key = $eventType . '|' . $createdAt;
+
+        if (isset($eventKeys[$key])) {
+            continue;
+        }
+
+        $description = 'Etapa ' . max(1, (int) ($followup['step_order'] ?? 0));
+        $flowName = trim((string) ($followup['flow_name'] ?? ''));
+
+        if ($flowName !== '') {
+            $description .= ' do fluxo ' . $flowName;
+        }
+
+        if ($status === 'falhou' && trim((string) ($followup['error'] ?? '')) !== '') {
+            $description .= '. Falha: ' . trim((string) $followup['error']);
+        } else {
+            $description .= '.';
+        }
+
+        $events[] = [
+            'id' => 0,
+            'lead_id' => $leadId,
+            'event_type' => $eventType,
+            'actor_user_id' => null,
+            'actor_name' => 'Sistema',
+            'title' => $status === 'enviado' ? 'Follow-up enviado' : 'Falha ao enviar follow-up',
+            'description' => $description,
+            'metadata' => null,
+            'created_at' => $createdAt,
+        ];
+        $eventKeys[$key] = true;
+    }
+
+    if (!array_filter($events, static fn (array $event): bool => (string) ($event['event_type'] ?? '') === 'lead_received')) {
+        $events[] = [
+            'id' => 0,
+            'lead_id' => $leadId,
+            'event_type' => 'lead_received',
+            'actor_user_id' => null,
+            'actor_name' => 'Sistema',
+            'title' => 'Lead recebido',
+            'description' => 'Contato entrou no CRM.',
+            'metadata' => null,
+            'created_at' => (string) ($lead['created_at'] ?? date('Y-m-d H:i:s')),
+        ];
+    }
+
+    usort($events, static function (array $left, array $right): int {
+        $dateComparison = strcmp((string) ($right['created_at'] ?? ''), (string) ($left['created_at'] ?? ''));
+        return $dateComparison !== 0 ? $dateComparison : ((int) ($right['id'] ?? 0) <=> (int) ($left['id'] ?? 0));
+    });
+
+    return $events;
+}
+
 function crm_user_can_manage_lead_scope(?array $user): bool
 {
     $role = (string) ($user['role'] ?? '');
@@ -1289,6 +1502,26 @@ function crm_record_lead_assignment(string $leadId, ?int $fromUserId, ?int $toUs
         'created_by_user_id' => $createdByUserId,
         'created_at' => date('Y-m-d H:i:s'),
     ]);
+
+    $fromUser = $fromUserId !== null ? crm_find_user_by_id($fromUserId) : null;
+    $toUser = $toUserId !== null ? crm_find_user_by_id($toUserId) : null;
+    $fromLabel = is_array($fromUser) ? crm_user_label($fromUser) : 'sem responsável';
+    $toLabel = is_array($toUser) ? crm_user_label($toUser) : 'sem responsável';
+    $title = match ($action) {
+        'rotation_assignment' => 'Lead distribuído automaticamente',
+        'user_deleted' => 'Responsável removido',
+        default => 'Responsável atualizado',
+    };
+
+    crm_record_lead_timeline_event(
+        $leadId,
+        'lead_assignment',
+        $title,
+        $fromLabel . ' → ' . $toLabel,
+        null,
+        $createdByUserId,
+        ['action' => $action, 'from_user_id' => $fromUserId, 'to_user_id' => $toUserId]
+    );
 }
 
 function crm_touch_user_assigned_at(?int $userId): void
@@ -1945,6 +2178,14 @@ function crm_create_lead(array $payload): array
     );
     $stmt->execute($lead);
 
+    crm_record_lead_timeline_event(
+        (string) $lead['id'],
+        'lead_received',
+        'Lead recebido',
+        'Contato entrou no CRM.',
+        'Sistema'
+    );
+
     if ($assignedUserId !== null) {
         crm_record_lead_assignment((string) $lead['id'], null, $assignedUserId, $assignmentAction, $assignmentReason, null);
         crm_touch_user_assigned_at($assignedUserId);
@@ -2052,11 +2293,16 @@ function crm_notify_created_lead_push(array $lead): void
     }
 }
 
-function crm_notify_lead_reply_push(array $lead, string $message = ''): void
+function crm_notify_lead_reply_push(
+    array $lead,
+    string $message = '',
+    string $messageId = '',
+    string $messageTimestamp = ''
+): void
 {
     try {
         require_once __DIR__ . '/push.php';
-        $result = crm_push_notify_lead_reply($lead, $message);
+        $result = crm_push_notify_lead_reply($lead, $message, $messageId, $messageTimestamp);
 
         if (($result['ok'] ?? false) !== true && ($result['skipped'] ?? false) !== true) {
             error_log('Erro ao enviar push de resposta do Lead ' . (string) ($lead['id'] ?? '') . ': ' . json_encode($result, JSON_UNESCAPED_UNICODE));
@@ -2371,6 +2617,49 @@ function crm_update_lead(string $id, array $updates): bool
         crm_touch_user_assigned_at($assignedUserId);
     }
 
+    if ($changed) {
+        $previousStatus = (string) ($lead['status'] ?? '');
+
+        if ($previousStatus !== $status) {
+            crm_record_lead_timeline_event(
+                $id,
+                'lead_moved',
+                'Lead movido no funil',
+                'De ' . crm_kanban_status_label($previousStatus) . ' para ' . crm_kanban_status_label($status) . '.',
+                null,
+                null,
+                ['from_status' => $previousStatus, 'to_status' => $status]
+            );
+        }
+
+        $fieldLabels = [
+            'name' => 'nome do contato', 'whatsapp' => 'WhatsApp', 'cpf' => 'CPF', 'tags' => 'tags',
+            'estimated_value' => 'valor estimado', 'proposal_value' => 'valor da proposta',
+            'expected_close_date' => 'previsão de fechamento', 'lost_reason' => 'motivo de perda',
+            'commercial_notes' => 'observações comerciais', 'notes' => 'anotações',
+        ];
+        $updatedFields = [];
+
+        foreach ($fieldLabels as $field => $label) {
+            if (array_key_exists($field, $updates)) {
+                $updatedFields[] = $label;
+            }
+        }
+
+        if ($updatedFields !== []) {
+            $isCommercialNote = count($updatedFields) === 1 && $updatedFields[0] === 'observações comerciais';
+            crm_record_lead_timeline_event(
+                $id,
+                $isCommercialNote ? 'commercial_note' : 'lead_updated',
+                $isCommercialNote ? 'Observação comercial registrada' : 'Dados do lead atualizados',
+                'Campos: ' . implode(', ', $updatedFields) . '.',
+                null,
+                null,
+                ['fields' => $updatedFields]
+            );
+        }
+    }
+
     return $changed;
 }
 
@@ -2476,6 +2765,36 @@ function crm_move_lead(string $id, string $status, array $orders): bool
                     'position' => $position,
                 ] + $accessParams);
                 $position += 10;
+            }
+        }
+
+        if ($previousStatus !== $status) {
+            if ($previousStatus === 'novo' && $status !== 'novo') {
+                crm_record_lead_timeline_event(
+                    $id,
+                    'first_contact',
+                    'Atendimento iniciado',
+                    'O lead passou a ser atendido no funil.'
+                );
+            }
+
+            crm_record_lead_timeline_event(
+                $id,
+                'lead_moved',
+                'Lead movido no funil',
+                'De ' . crm_kanban_status_label($previousStatus) . ' para ' . crm_kanban_status_label($status) . '.',
+                null,
+                null,
+                ['from_status' => $previousStatus, 'to_status' => $status]
+            );
+
+            if ($previousStatus === 'followup' && $status !== 'followup') {
+                crm_record_lead_timeline_event(
+                    $id,
+                    'followup_cancelled',
+                    'Follow-up interrompido',
+                    'O lead saiu da coluna Follow-up; as próximas mensagens pendentes foram canceladas.'
+                );
             }
         }
 
@@ -2713,7 +3032,7 @@ function crm_delete_followup_flow(int $id): bool
     return $stmt->rowCount() > 0;
 }
 
-function crm_assign_followup_flow(string $leadId, int $flowId): bool
+function crm_assign_followup_flow(string $leadId, int $flowId, bool $automatic = false): bool
 {
     $flow = crm_find_followup_flow($flowId);
 
@@ -2784,6 +3103,42 @@ function crm_assign_followup_flow(string $leadId, int $flowId): bool
             ]);
         }
 
+        if ($update->rowCount() > 0) {
+            $previousStatus = (string) ($lead['status'] ?? '');
+
+            if ($previousStatus !== 'followup') {
+                if ($previousStatus === 'novo') {
+                    crm_record_lead_timeline_event(
+                        $leadId,
+                        'first_contact',
+                        'Atendimento iniciado',
+                        'O lead passou a ser atendido no funil.',
+                        $automatic ? 'Sistema' : null
+                    );
+                }
+
+                crm_record_lead_timeline_event(
+                    $leadId,
+                    'lead_moved',
+                    'Lead movido no funil',
+                    'De ' . crm_kanban_status_label($previousStatus) . ' para ' . crm_kanban_status_label('followup') . '.',
+                    $automatic ? 'Sistema' : null,
+                    null,
+                    ['from_status' => $previousStatus, 'to_status' => 'followup']
+                );
+            }
+
+            crm_record_lead_timeline_event(
+                $leadId,
+                'followup_started',
+                $automatic ? 'Follow-up automático iniciado' : 'Fluxo de follow-up aplicado',
+                'Fluxo: ' . trim((string) ($flow['name'] ?? 'Sem nome')) . '.',
+                $automatic ? 'Sistema' : null,
+                null,
+                ['flow_id' => $flowId, 'flow_name' => (string) ($flow['name'] ?? '')]
+            );
+        }
+
         $db->commit();
         return $update->rowCount() > 0;
     } catch (Throwable $error) {
@@ -2830,7 +3185,7 @@ function crm_trigger_automatic_followup(string $leadId, string $fromStatus, stri
         ];
     }
 
-    if (!crm_assign_followup_flow($leadId, $flowId)) {
+    if (!crm_assign_followup_flow($leadId, $flowId, true)) {
         return [
             'ok' => false,
             'triggered' => false,
@@ -2911,6 +3266,16 @@ function crm_stop_followup_after_incoming_reply(string $leadId): array
             'error' => 'Cancelado automaticamente após resposta do lead.',
         ]);
 
+        if ($updateLead->rowCount() > 0) {
+            crm_record_lead_timeline_event(
+                $leadId,
+                'lead_replied',
+                'Lead respondeu no WhatsApp',
+                'O follow-up foi interrompido automaticamente após a resposta do contato.',
+                'Sistema'
+            );
+        }
+
         $db->commit();
 
         return [
@@ -2973,7 +3338,13 @@ function crm_read_due_followups(int $limit = 20): array
 
 function crm_update_followup_queue_item(int $id, string $status, ?string $error = null): bool
 {
-    $itemStmt = crm_db()->prepare('SELECT * FROM followup_queue WHERE id = :id LIMIT 1');
+    $itemStmt = crm_db()->prepare(
+        'SELECT q.*, f.name AS flow_name
+         FROM followup_queue q
+         LEFT JOIN followup_flows f ON f.id = q.flow_id
+         WHERE q.id = :id
+         LIMIT 1'
+    );
     $itemStmt->execute(['id' => $id]);
     $item = $itemStmt->fetch();
 
@@ -2993,6 +3364,32 @@ function crm_update_followup_queue_item(int $id, string $status, ?string $error 
 
     if (is_array($item) && in_array($status, ['enviado', 'falhou'], true)) {
         crm_record_followup_step_history($item, $status, $error);
+
+        if ((string) ($item['status'] ?? '') !== $status) {
+            $stepOrder = max(1, (int) ($item['step_order'] ?? 0));
+            $flowName = trim((string) ($item['flow_name'] ?? ''));
+            $description = 'Etapa ' . $stepOrder;
+
+            if ($flowName !== '') {
+                $description .= ' do fluxo ' . $flowName;
+            }
+
+            if ($status === 'falhou' && trim((string) $error) !== '') {
+                $description .= '. Falha: ' . trim((string) $error);
+            } else {
+                $description .= '.';
+            }
+
+            crm_record_lead_timeline_event(
+                (string) ($item['lead_id'] ?? ''),
+                $status === 'enviado' ? 'followup_sent' : 'followup_failed',
+                $status === 'enviado' ? 'Follow-up enviado' : 'Falha ao enviar follow-up',
+                $description,
+                'Sistema',
+                null,
+                ['flow_id' => (int) ($item['flow_id'] ?? 0), 'step_order' => $stepOrder]
+            );
+        }
     }
 
     return $stmt->rowCount() > 0;

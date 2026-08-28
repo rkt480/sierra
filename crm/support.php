@@ -68,7 +68,7 @@ $implementationSteps = [
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Suporte Interno | CRM</title>
-    <link rel="stylesheet" href="./assets/crm.css?v=20260824-form-answers-v1" />
+    <link rel="stylesheet" href="./assets/crm.css?v=20260828-sierra-media-timeline-v1" />
   </head>
   <body class="settings-page support-page">
     <div class="app-shell">
