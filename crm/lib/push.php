@@ -488,7 +488,7 @@ function crm_push_send_to_user(int $userId, array $notification): array
     $subscriptions = crm_push_user_subscriptions($userId);
 
     if ($subscriptions === []) {
-        return ['ok' => false, 'skipped' => true, 'reason' => 'Vendedor sem dispositivo registrado.'];
+        return ['ok' => false, 'skipped' => true, 'reason' => 'Usuário sem dispositivo registrado.'];
     }
 
     $payload = json_encode($notification, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -522,20 +522,76 @@ function crm_push_send_to_user(int $userId, array $notification): array
     ];
 }
 
+function crm_push_send_to_users(array $userIds, array $notification): array
+{
+    $userIds = array_values(array_unique(array_filter(array_map('intval', $userIds), static fn(int $userId): bool => $userId > 0)));
+
+    if ($userIds === []) {
+        return ['ok' => false, 'skipped' => true, 'reason' => 'Nenhum usuário habilitado para receber a notificação.'];
+    }
+
+    $sent = 0;
+    $removed = 0;
+    $errors = [];
+    $skippedReasons = [];
+
+    foreach ($userIds as $userId) {
+        $result = crm_push_send_to_user($userId, $notification);
+
+        $sent += (int) ($result['sent'] ?? 0);
+        $removed += (int) ($result['removed'] ?? 0);
+        $errors = array_merge($errors, is_array($result['errors'] ?? null) ? $result['errors'] : []);
+
+        if (($result['skipped'] ?? false) === true && ($result['reason'] ?? '') !== '') {
+            $skippedReasons[] = (string) $result['reason'];
+        }
+    }
+
+    return [
+        'ok' => $sent > 0,
+        'skipped' => $sent === 0 && $errors === [],
+        'sent' => $sent,
+        'removed' => $removed,
+        'errors' => $errors,
+        'reason' => $sent > 0 ? '' : (implode(' ', array_unique($skippedReasons)) ?: 'Nenhuma notificação foi enviada.'),
+    ];
+}
+
+function crm_push_lead_notification_user_ids(?int $assignedUserId): array
+{
+    if ($assignedUserId !== null && $assignedUserId > 0) {
+        $stmt = crm_push_db()->prepare(
+            'SELECT id FROM crm_users
+             WHERE id = :id AND active = 1 AND receive_lead_notifications = 1'
+        );
+        $stmt->execute(['id' => $assignedUserId]);
+
+        return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+    }
+
+    $stmt = crm_push_db()->query(
+        'SELECT id FROM crm_users
+         WHERE active = 1 AND role = "admin" AND receive_lead_notifications = 1
+         ORDER BY id ASC'
+    );
+
+    return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+}
+
 function crm_push_notify_lead_created(array $lead): array
 {
     $userId = (int) ($lead['assigned_user_id'] ?? 0);
 
-    if ($userId <= 0) {
-        return ['ok' => false, 'skipped' => true, 'reason' => 'Lead sem vendedor responsável.'];
-    }
-
     $name = trim((string) ($lead['name'] ?? '')) ?: 'Novo contato';
     $leadId = rawurlencode((string) ($lead['id'] ?? ''));
 
-    return crm_push_send_to_user($userId, [
-        'title' => 'Novo lead atribuído',
-        'body' => $name . ' entrou em contato. Atenda agora.',
+    $assigned = $userId > 0;
+
+    return crm_push_send_to_users(crm_push_lead_notification_user_ids($assigned ? $userId : null), [
+        'title' => $assigned ? 'Novo lead atribuído' : 'Novo lead sem vendedor',
+        'body' => $assigned
+            ? $name . ' entrou em contato. Atenda agora.'
+            : $name . ' entrou em contato e aguarda atendimento.',
         'url' => './index.php?lead=' . $leadId,
         'tag' => 'lead-' . (string) ($lead['id'] ?? uniqid('', true)),
         'icon' => './assets/icon-192.png?v=20260819-sierra-icon-v1',
@@ -547,10 +603,6 @@ function crm_push_notify_lead_created(array $lead): array
 function crm_push_notify_lead_reply(array $lead, string $message = '', string $messageId = '', string $messageTimestamp = ''): array
 {
     $userId = (int) ($lead['assigned_user_id'] ?? 0);
-
-    if ($userId <= 0) {
-        return ['ok' => false, 'skipped' => true, 'reason' => 'Lead sem vendedor responsável.'];
-    }
 
     $name = trim((string) ($lead['name'] ?? '')) ?: 'Contato WhatsApp';
     $preview = trim(preg_replace('/\s+/u', ' ', $message) ?? '');
@@ -594,7 +646,7 @@ function crm_push_notify_lead_reply(array $lead, string $message = '', string $m
         $preview = rtrim(substr($preview, 0, 117)) . '...';
     }
 
-    $result = crm_push_send_to_user($userId, [
+    $result = crm_push_send_to_users(crm_push_lead_notification_user_ids($userId > 0 ? $userId : null), [
         'event' => 'lead-reply',
         'title' => 'Nova resposta do lead',
         'body' => $name . ': ' . $preview,

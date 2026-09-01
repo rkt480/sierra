@@ -92,6 +92,7 @@ CREATE TABLE IF NOT EXISTS publi_ai_crm.crm_users (
   password_hash VARCHAR(255) NOT NULL,
   role VARCHAR(30) NOT NULL DEFAULT 'vendedor',
   active TINYINT(1) NOT NULL DEFAULT 1,
+  receive_lead_notifications TINYINT(1) NOT NULL DEFAULT 1,
   participates_in_rotation TINYINT(1) NOT NULL DEFAULT 0,
   rotation_weight INT NOT NULL DEFAULT 1,
   last_assigned_at DATETIME NULL,

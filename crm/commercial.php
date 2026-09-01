@@ -31,6 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'password' => $_POST['password'] ?? '',
             'role' => $_POST['role'] ?? 'vendedor',
             'active' => ($_POST['active'] ?? '') === '1',
+            'receive_lead_notifications' => ($_POST['receive_lead_notifications'] ?? '') === '1',
             'participates_in_rotation' => ($_POST['participates_in_rotation'] ?? '') === '1',
             'rotation_weight' => $_POST['rotation_weight'] ?? 1,
             'access_schedule_enabled' => ($_POST['access_schedule_enabled'] ?? '') === '1',
@@ -239,6 +240,10 @@ $overdueLeads = crm_read_sla_overdue_leads(20);
                     <span>Usuário ativo</span>
                   </label>
                   <label class="checkbox-field">
+                    <input type="checkbox" name="receive_lead_notifications" value="1" checked />
+                    <span>Receber notificações de leads</span>
+                  </label>
+                  <label class="checkbox-field">
                     <input type="checkbox" name="participates_in_rotation" value="1" checked />
                     <span>Participa da roleta</span>
                   </label>
@@ -340,6 +345,10 @@ $overdueLeads = crm_read_sla_overdue_leads(20);
                           <label class="checkbox-field">
                             <input type="checkbox" name="active" value="1" <?= (int) ($crmUser['active'] ?? 0) === 1 ? 'checked' : '' ?> />
                             <span>Usuário ativo</span>
+                          </label>
+                          <label class="checkbox-field">
+                            <input type="checkbox" name="receive_lead_notifications" value="1" <?= (int) ($crmUser['receive_lead_notifications'] ?? 1) === 1 ? 'checked' : '' ?> />
+                            <span>Receber notificações de leads</span>
                           </label>
                           <label class="checkbox-field">
                             <input type="checkbox" name="participates_in_rotation" value="1" <?= (int) ($crmUser['participates_in_rotation'] ?? 0) === 1 ? 'checked' : '' ?> />

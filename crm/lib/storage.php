@@ -222,6 +222,7 @@ function crm_ensure_crm_schema(PDO $pdo): void
             password_hash VARCHAR(255) NOT NULL,
             role VARCHAR(30) NOT NULL DEFAULT "vendedor",
             active TINYINT(1) NOT NULL DEFAULT 1,
+            receive_lead_notifications TINYINT(1) NOT NULL DEFAULT 1,
             participates_in_rotation TINYINT(1) NOT NULL DEFAULT 0,
             rotation_weight INT NOT NULL DEFAULT 1,
             last_assigned_at DATETIME NULL,
@@ -476,6 +477,7 @@ function crm_ensure_user_columns(PDO $pdo): void
         'email' => 'VARCHAR(180) NULL AFTER username',
         'role' => 'VARCHAR(30) NOT NULL DEFAULT "vendedor" AFTER password_hash',
         'active' => 'TINYINT(1) NOT NULL DEFAULT 1 AFTER role',
+        'receive_lead_notifications' => 'TINYINT(1) NOT NULL DEFAULT 1 AFTER active',
         'participates_in_rotation' => 'TINYINT(1) NOT NULL DEFAULT 0 AFTER active',
         'rotation_weight' => 'INT NOT NULL DEFAULT 1 AFTER participates_in_rotation',
         'last_assigned_at' => 'DATETIME NULL AFTER rotation_weight',
@@ -1592,6 +1594,7 @@ function crm_save_user(array $payload): array
     $password = (string) ($payload['password'] ?? '');
     $role = crm_normalize_user_role((string) ($payload['role'] ?? 'vendedor'));
     $active = !empty($payload['active']) ? 1 : 0;
+    $receiveLeadNotifications = !empty($payload['receive_lead_notifications']) ? 1 : 0;
     $participates = !empty($payload['participates_in_rotation']) ? 1 : 0;
     $weight = max(1, min(10, (int) ($payload['rotation_weight'] ?? 1)));
     $accessScheduleEnabled = !empty($payload['access_schedule_enabled']) ? 1 : 0;
@@ -1640,6 +1643,7 @@ function crm_save_user(array $payload): array
                 'email = :email',
                 'role = :role',
                 'active = :active',
+                'receive_lead_notifications = :receive_lead_notifications',
                 'participates_in_rotation = :participates_in_rotation',
                 'rotation_weight = :rotation_weight',
                 'access_schedule_enabled = :access_schedule_enabled',
@@ -1656,6 +1660,7 @@ function crm_save_user(array $payload): array
                 'email' => $email !== '' ? $email : null,
                 'role' => $role,
                 'active' => $active,
+                'receive_lead_notifications' => $receiveLeadNotifications,
                 'participates_in_rotation' => $participates,
                 'rotation_weight' => $weight,
                 'access_schedule_enabled' => $accessScheduleEnabled,
@@ -1679,11 +1684,11 @@ function crm_save_user(array $payload): array
 
         $stmt = crm_db()->prepare(
             'INSERT INTO crm_users
-            (name, username, email, password_hash, role, active, participates_in_rotation, rotation_weight,
+            (name, username, email, password_hash, role, active, receive_lead_notifications, participates_in_rotation, rotation_weight,
              access_schedule_enabled, access_start_time, access_end_time,
              access_saturday_enabled, access_sunday_enabled, created_at, updated_at)
             VALUES
-            (:name, :username, :email, :password_hash, :role, :active, :participates_in_rotation, :rotation_weight,
+            (:name, :username, :email, :password_hash, :role, :active, :receive_lead_notifications, :participates_in_rotation, :rotation_weight,
              :access_schedule_enabled, :access_start_time, :access_end_time,
              :access_saturday_enabled, :access_sunday_enabled, :created_at, :updated_at)'
         );
@@ -1694,6 +1699,7 @@ function crm_save_user(array $payload): array
             'password_hash' => password_hash($password, PASSWORD_DEFAULT),
             'role' => $role,
             'active' => $active,
+            'receive_lead_notifications' => $receiveLeadNotifications,
             'participates_in_rotation' => $participates,
             'rotation_weight' => $weight,
             'access_schedule_enabled' => $accessScheduleEnabled,
