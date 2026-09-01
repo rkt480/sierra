@@ -6665,11 +6665,14 @@ textarea:focus {
 }
 
 @media (max-width: 1024px) {
-  /* Composer mobile: actions stay together and the field occupies only the
-     flexible center of the row. */
+  /* Reserve a column for each control. A flex row allowed the textarea's
+     preferred width to push the record and send buttons outside the mobile
+     viewport on narrow screens. */
   .whatsapp-crm-page .wa-composer {
-    display: flex;
+    display: grid;
     width: 100%;
+    min-width: 0;
+    grid-template-columns: 88px minmax(0, 1fr) 40px 40px;
     align-items: center;
     gap: 8px;
     padding: 8px 12px;
@@ -6686,8 +6689,8 @@ textarea:focus {
 
   .whatsapp-crm-page .wa-composer-main {
     display: grid;
+    width: 100%;
     min-width: 0;
-    flex: 1 1 auto;
   }
 
   .whatsapp-crm-page .wa-composer textarea {
@@ -6713,7 +6716,6 @@ textarea:focus {
     min-width: 40px;
     height: 40px;
     min-height: 40px;
-    flex: 0 0 40px;
   }
 
   .whatsapp-crm-page .wa-composer .wa-record-button[hidden],
@@ -6734,6 +6736,7 @@ textarea:focus {
   }
 
   .whatsapp-crm-page .wa-composer {
+    grid-template-columns: 72px minmax(0, 1fr) 36px 36px;
     gap: 4px;
     padding-inline: 8px;
   }
