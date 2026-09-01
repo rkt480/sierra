@@ -6486,7 +6486,7 @@ textarea:focus {
   }
 
   .whatsapp-crm-page .wa-thread {
-    grid-template-rows: 68px minmax(0, 1fr) auto;
+    grid-template-rows: 78px minmax(0, 1fr) auto;
     min-height: 0;
     min-width: 0;
     max-height: none;
@@ -6495,7 +6495,37 @@ textarea:focus {
   }
 
   .whatsapp-crm-page .wa-thread-header {
-    padding: 12px 14px;
+    display: grid;
+    grid-template-columns: 38px 50px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    min-height: 78px;
+    padding: 8px 12px;
+  }
+
+  .whatsapp-crm-page .wa-thread-header > div {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .whatsapp-crm-page .wa-thread-header h2 {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.18;
+    text-overflow: ellipsis;
+    white-space: normal;
+  }
+
+  .whatsapp-crm-page .wa-thread-header p {
+    overflow: hidden;
+    margin-top: 3px;
+    font-size: 0.78rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .whatsapp-crm-page .wa-mobile-thread-back {
@@ -6536,6 +6566,33 @@ textarea:focus {
     overscroll-behavior: contain;
     overflow-x: clip;
     -webkit-overflow-scrolling: touch;
+  }
+
+  .whatsapp-crm-page .wa-message {
+    box-sizing: border-box;
+    max-width: 88%;
+  }
+
+  /* Flex cross-axis alignment uses the padding edge in Safari. Keep a
+     physical gutter on the outgoing side so bubbles and their status never
+     disappear beneath the clipped edge of the conversation panel. */
+  .whatsapp-crm-page .wa-message-outgoing {
+    margin-right: 12px;
+  }
+
+  .whatsapp-crm-page .wa-message p {
+    overflow-wrap: anywhere;
+  }
+
+  .whatsapp-crm-page .wa-message footer {
+    max-width: 100%;
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+
+  .whatsapp-crm-page .wa-message footer span,
+  .whatsapp-crm-page .wa-message footer time {
+    min-width: 0;
   }
 
   .whatsapp-crm-page .wa-thread-bottom {

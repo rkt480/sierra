@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <title>CRM Sierra</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" sizes="180x180" href="./assets/icon-180.png?v=20260819-sierra-icon-v1" />
-    <link rel="stylesheet" href="./assets/crm.css?v=20260901-mobile-composer-v1" />
+    <link rel="stylesheet" href="./assets/crm.css?v=20260901-mobile-responsive-v2" />
   </head>
   <body class="auth-page">
     <main class="auth-card">

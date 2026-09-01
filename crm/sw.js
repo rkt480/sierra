@@ -1,7 +1,7 @@
-const CACHE_NAME = "sierra-crm-v33";
+const CACHE_NAME = "sierra-crm-v34";
 const APP_SHELL = [
-  "./assets/crm.css?v=20260901-mobile-composer-v1",
-  "./assets/crm.js?v=20260901-mobile-composer-v1",
+  "./assets/crm.css?v=20260901-mobile-responsive-v2",
+  "./assets/crm.js?v=20260901-mobile-responsive-v2",
   "./assets/crm-navigation.js?v=20260812-fast-navigation-v3",
   "./assets/icon.svg?v=20260819-sierra-icon-v1",
   "./assets/icon-180.png?v=20260819-sierra-icon-v1",
