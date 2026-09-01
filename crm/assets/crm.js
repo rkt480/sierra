@@ -1578,7 +1578,7 @@ if ("serviceWorker" in navigator) {
     void syncPushState();
   }, 5 * 60 * 1000);
 
-  navigator.serviceWorker.register("./sw.js?v=20260828-sierra-media-timeline-v1", {
+  navigator.serviceWorker.register("./sw.js?v=20260901-mobile-composer-v1", {
     scope: "./",
     updateViaCache: "none",
   })
