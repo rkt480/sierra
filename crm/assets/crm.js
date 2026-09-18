@@ -8,6 +8,9 @@ const csrfToken = document.querySelector("meta[name='csrf-token']")?.content || 
 let draggedCard = null;
 let boardScrollFrame = null;
 let boardScrollSpeed = 0;
+let dropzoneScrollFrame = null;
+let dropzoneScrollSpeed = 0;
+let dropzoneScrollTarget = null;
 let localKanbanMoveUntil = 0;
 const modalOrigins = new WeakMap();
 
@@ -170,6 +173,57 @@ function stopBoardAutoScroll() {
   }
 }
 
+function stopDropzoneAutoScroll() {
+  dropzoneScrollSpeed = 0;
+  dropzoneScrollTarget = null;
+
+  if (dropzoneScrollFrame !== null) {
+    cancelAnimationFrame(dropzoneScrollFrame);
+    dropzoneScrollFrame = null;
+  }
+}
+
+function scrollDropzoneStep() {
+  if (!dropzoneScrollTarget || dropzoneScrollSpeed === 0) {
+    stopDropzoneAutoScroll();
+    return;
+  }
+
+  dropzoneScrollTarget.scrollTop += dropzoneScrollSpeed;
+  dropzoneScrollFrame = requestAnimationFrame(scrollDropzoneStep);
+}
+
+function updateDropzoneAutoScroll(zone, clientY) {
+  if (!zone || !draggedCard) {
+    stopDropzoneAutoScroll();
+    return;
+  }
+
+  const rect = zone.getBoundingClientRect();
+  const edgeSize = Math.min(96, rect.height * 0.25);
+  const topDistance = clientY - rect.top;
+  const bottomDistance = rect.bottom - clientY;
+  const maxSpeed = 14;
+
+  if (topDistance >= 0 && topDistance < edgeSize) {
+    dropzoneScrollSpeed = -Math.ceil(((edgeSize - topDistance) / edgeSize) * maxSpeed);
+  } else if (bottomDistance >= 0 && bottomDistance < edgeSize) {
+    dropzoneScrollSpeed = Math.ceil(((edgeSize - bottomDistance) / edgeSize) * maxSpeed);
+  } else {
+    dropzoneScrollSpeed = 0;
+  }
+
+  dropzoneScrollTarget = dropzoneScrollSpeed === 0 ? null : zone;
+
+  if (dropzoneScrollSpeed !== 0 && dropzoneScrollFrame === null) {
+    dropzoneScrollFrame = requestAnimationFrame(scrollDropzoneStep);
+  }
+
+  if (dropzoneScrollSpeed === 0) {
+    stopDropzoneAutoScroll();
+  }
+}
+
 function scrollBoardStep() {
   if (!kanbanBoard || boardScrollSpeed === 0) {
     stopBoardAutoScroll();
@@ -267,6 +321,7 @@ function resetTouchDragState() {
   document.body.classList.remove("touch-dragging");
   clearTouchDropzoneState();
   stopBoardAutoScroll();
+  stopDropzoneAutoScroll();
   draggedCard = null;
 }
 
@@ -396,6 +451,7 @@ function moveTouchKanbanDrag(event) {
 
   clearTouchDropzoneState();
   zone.classList.add("is-over");
+  updateDropzoneAutoScroll(zone, point.clientY);
   const card = touchDragState.card;
   touchDragState.dropzone = zone;
   placeTouchCardInDropzone(card, zone, point.clientY);
@@ -489,6 +545,7 @@ cards.forEach((card) => {
     card.classList.remove("is-dragging");
     draggedCard = null;
     stopBoardAutoScroll();
+    stopDropzoneAutoScroll();
   });
 
   card.addEventListener("pointerdown", beginTouchKanbanDrag);
@@ -543,6 +600,7 @@ dropzones.forEach((zone) => {
   zone.addEventListener("dragover", (event) => {
     event.preventDefault();
     updateBoardAutoScroll(event.clientX);
+    updateDropzoneAutoScroll(zone, event.clientY);
     zone.classList.add("is-over");
   });
 
@@ -553,6 +611,7 @@ dropzones.forEach((zone) => {
   zone.addEventListener("drop", async (event) => {
     event.preventDefault();
     zone.classList.remove("is-over");
+    stopDropzoneAutoScroll();
     stopBoardAutoScroll();
 
     if (!draggedCard) {

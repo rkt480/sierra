@@ -609,7 +609,11 @@ dt {
 }
 
 .kanban-column {
+  display: flex;
+  flex-direction: column;
+  max-height: min(720px, calc(100vh - 240px));
   min-height: 520px;
+  overflow: hidden;
   background: rgba(255, 255, 255, 0.48);
   border: 1px solid rgba(255, 255, 255, 0.82);
   border-radius: 34px;
@@ -644,10 +648,13 @@ dt {
 }
 
 .kanban-dropzone {
+  flex: 1 1 auto;
   display: grid;
   align-content: start;
   gap: 12px;
-  min-height: 430px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0 18px 18px;
 }
 
@@ -6310,6 +6317,7 @@ textarea:focus {
   }
 
   .kanban-column {
+    max-height: min(620px, calc(100dvh - 310px));
     min-height: 0;
     border-radius: 22px;
     scroll-snap-align: start;
