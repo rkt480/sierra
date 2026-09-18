@@ -412,7 +412,7 @@ function beginTouchKanbanDrag(event) {
   touchDragState.active = false;
   touchDragState.holdTimer = window.setTimeout(() => {
     activateTouchKanbanDrag(card);
-  }, 420);
+  }, 700);
 }
 
 function moveTouchKanbanDrag(event) {
