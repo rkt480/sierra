@@ -677,23 +677,13 @@ dt {
 @media (min-width: 881px) {
   .kanban-dropzone {
     overflow-x: hidden;
-    scrollbar-gutter: stable;
+    scrollbar-width: none;
   }
 
   .kanban-dropzone::-webkit-scrollbar {
-    width: 8px;
+    display: none;
+    width: 0;
     height: 0;
-  }
-
-  .kanban-dropzone::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .kanban-dropzone::-webkit-scrollbar-thumb {
-    background: rgba(100, 116, 139, 0.38);
-    border: 2px solid transparent;
-    border-radius: 999px;
-    background-clip: padding-box;
   }
 }
 
