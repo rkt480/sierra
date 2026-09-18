@@ -6330,10 +6330,18 @@ textarea:focus {
   }
 
   .kanban-column {
-    max-height: min(620px, calc(100dvh - 310px));
+    display: block;
+    max-height: none;
     min-height: 0;
+    overflow: visible;
     border-radius: 22px;
     scroll-snap-align: start;
+  }
+
+  .kanban-dropzone {
+    display: grid;
+    flex: none;
+    overflow: visible;
   }
 
   .kanban-column-header {
