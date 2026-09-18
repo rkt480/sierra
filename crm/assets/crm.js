@@ -400,8 +400,6 @@ function beginTouchKanbanDrag(event) {
     return;
   }
 
-  event.preventDefault();
-
   touchDragState.card = card;
   touchDragState.previousParent = card.parentElement;
   touchDragState.previousNextSibling = card.nextElementSibling;
@@ -414,7 +412,7 @@ function beginTouchKanbanDrag(event) {
   touchDragState.active = false;
   touchDragState.holdTimer = window.setTimeout(() => {
     activateTouchKanbanDrag(card);
-  }, 180);
+  }, 420);
 }
 
 function moveTouchKanbanDrag(event) {
@@ -431,11 +429,14 @@ function moveTouchKanbanDrag(event) {
   if (!touchDragState.active) {
     const distance = Math.hypot(point.clientX - touchDragState.startX, point.clientY - touchDragState.startY);
 
+    // A moving finger means scrolling, not a long-press drag. Once the
+    // gesture has moved, cancel the pending hold so slow scrolling cannot
+    // unexpectedly pick up the lead.
     if (distance > 10) {
-      activateTouchKanbanDrag(touchDragState.card);
-    } else {
-      return;
+      clearTouchDragTimer();
     }
+
+    return;
   }
 
   event.preventDefault();
@@ -454,7 +455,12 @@ function moveTouchKanbanDrag(event) {
   updateDropzoneAutoScroll(zone, point.clientY);
   const card = touchDragState.card;
   touchDragState.dropzone = zone;
-  placeTouchCardInDropzone(card, zone, point.clientY);
+
+  // No mobile reordering inside the same column. The long-press gesture is
+  // reserved for moving a lead to another pipeline stage.
+  if (zone !== card.parentElement) {
+    placeTouchCardInDropzone(card, zone, point.clientY);
+  }
 }
 
 async function finishTouchKanbanDrag(event, cancelled = false) {
@@ -480,7 +486,7 @@ async function finishTouchKanbanDrag(event, cancelled = false) {
   const previousStatus = previousParent?.dataset.status || "";
   const lastDropzone = touchDragState.dropzone || getTouchDropzone(touchDragState.lastX, touchDragState.lastY);
 
-  if (!cancelled && lastDropzone) {
+  if (!cancelled && lastDropzone && lastDropzone !== previousParent) {
     const targetStatus = lastDropzone.dataset.status || previousStatus;
 
     if (canMoveLeadToStatus(card, targetStatus)) {
@@ -497,7 +503,7 @@ async function finishTouchKanbanDrag(event, cancelled = false) {
   card.classList.remove("is-dragging", "is-touch-dragging");
   resetTouchDragState();
 
-  if (cancelled || !finalParent || !previousParent) {
+  if (cancelled || !finalParent || !previousParent || finalParent === previousParent) {
     restoreTouchCard(card, previousParent, previousNextSibling, previousStatus);
     updateColumnCounts();
     return;

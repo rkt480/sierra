@@ -6842,7 +6842,7 @@ textarea:focus {
   }
 
   .leads-page .kanban-card {
-    touch-action: none;
+    touch-action: pan-y;
   }
 
   .leads-page .kanban-card.is-touch-dragging {
@@ -6885,6 +6885,6 @@ textarea:focus {
 
 @media (pointer: coarse) {
   .leads-page .kanban-card {
-    touch-action: none;
+    touch-action: pan-y;
   }
 }
