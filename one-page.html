@@ -65,6 +65,7 @@
             target="_blank"
             rel="noopener noreferrer"
             id="contato"
+            data-track="whatsapp"
           >
             <span class="whatsapp-button__icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" role="presentation">
@@ -84,5 +85,23 @@
         <address>Av. Dr. Vicente Machado, 429 · Centro · Ponta Grossa — PR · 84010-000, Brasil</address>
       </footer>
     </main>
+
+    <script>
+      document.querySelector('[data-track="whatsapp"]')?.addEventListener("click", (event) => {
+        const button = event.currentTarget;
+
+        window.dataLayer = window.dataLayer || [];
+        window.dataLayer.push({
+          event: "whatsapp_click",
+          event_category: "engagement",
+          event_action: "click",
+          event_label: "whatsapp_hero",
+          button_id: button.id,
+          destination: "whatsapp",
+          link_url: button.href,
+          page_path: window.location.pathname,
+        });
+      });
+    </script>
   </body>
 </html>
