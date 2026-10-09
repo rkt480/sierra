@@ -47,7 +47,7 @@ function crm_db(): PDO
 
 function crm_schema_version(): string
 {
-    return '20260828.1';
+    return '20261009.1';
 }
 
 function crm_schema_version_is_current(PDO $pdo): bool
@@ -1673,7 +1673,9 @@ function crm_save_user(array $payload): array
     }
 
     try {
-        crm_ensure_user_role_storage(crm_db());
+        $userDb = crm_db();
+        crm_ensure_user_columns($userDb);
+        crm_ensure_user_role_storage($userDb);
 
         if ($id > 0) {
             $existing = crm_find_user_by_id($id);
