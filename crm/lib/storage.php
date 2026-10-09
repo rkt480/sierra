@@ -503,6 +503,35 @@ function crm_ensure_user_columns(PDO $pdo): void
     }
 }
 
+function crm_ensure_user_role_storage(PDO $pdo): void
+{
+    $stmt = $pdo->prepare(
+        'SELECT DATA_TYPE, COALESCE(CHARACTER_MAXIMUM_LENGTH, 0) AS character_length
+         FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = :table_name
+           AND COLUMN_NAME = :column_name
+         LIMIT 1'
+    );
+    $stmt->execute(['table_name' => 'crm_users', 'column_name' => 'role']);
+    $column = $stmt->fetch();
+
+    if (!is_array($column)) {
+        throw new RuntimeException('A coluna de perfil dos usuários não foi encontrada.');
+    }
+
+    $dataType = strtolower((string) ($column['DATA_TYPE'] ?? ''));
+    $characterLength = (int) ($column['character_length'] ?? 0);
+
+    if ($dataType === 'varchar' && $characterLength >= 30) {
+        return;
+    }
+
+    // Older installations may have kept role as an ENUM that rejects "agencia".
+    // Normalize it to the VARCHAR contract used by the CRM schemas before saving.
+    $pdo->exec("ALTER TABLE crm_users MODIFY COLUMN role VARCHAR(30) NOT NULL DEFAULT 'vendedor'");
+}
+
 function crm_seed_default_admin_user(PDO $pdo): void
 {
     $config = require dirname(__DIR__) . '/config.php';
@@ -1625,6 +1654,8 @@ function crm_save_user(array $payload): array
     }
 
     try {
+        crm_ensure_user_role_storage(crm_db());
+
         if ($id > 0) {
             $existing = crm_find_user_by_id($id);
 
@@ -1718,7 +1749,9 @@ function crm_save_user(array $payload): array
             return ['ok' => false, 'error' => 'Este usuário já está em uso.'];
         }
 
-        throw $error;
+        error_log('[CRM] Falha ao salvar usuário: ' . $error->getMessage());
+
+        return ['ok' => false, 'error' => 'Não foi possível salvar o usuário. Tente novamente; o erro foi registrado para diagnóstico.'];
     }
 }
 
