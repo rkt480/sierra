@@ -157,10 +157,7 @@ $overdueLeads = crm_read_sla_overdue_leads(20);
         <?php endif; ?>
 
         <?php if ($error !== ''): ?>
-          <div class="alert">
-            <?= htmlspecialchars($error) ?>
-            <br /><a href="user-save-log.php"><strong>Abrir log do cadastro</strong></a>
-          </div>
+          <div class="alert"><?= htmlspecialchars($error) ?></div>
         <?php endif; ?>
 
         <main class="dashboard settings-layout commercial-layout">
