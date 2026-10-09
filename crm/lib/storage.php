@@ -532,6 +532,25 @@ function crm_ensure_user_role_storage(PDO $pdo): void
     $pdo->exec("ALTER TABLE crm_users MODIFY COLUMN role VARCHAR(30) NOT NULL DEFAULT 'vendedor'");
 }
 
+function crm_record_user_save_error(PDOException $error): void
+{
+    $errorInfo = is_array($error->errorInfo ?? null) ? $error->errorInfo : [];
+    $entry = [
+        'created_at' => date(DATE_ATOM),
+        'sqlstate' => (string) $error->getCode(),
+        'driver_code' => is_numeric($errorInfo[1] ?? null) ? (int) $errorInfo[1] : null,
+        'source' => basename($error->getFile()) . ':' . $error->getLine(),
+        'message' => substr($error->getMessage(), 0, 2000),
+    ];
+    $encoded = json_encode($entry, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+
+    if (is_string($encoded)) {
+        @file_put_contents(dirname(__DIR__) . '/data/user-save-errors.log', $encoded . PHP_EOL, FILE_APPEND | LOCK_EX);
+    }
+
+    error_log('[CRM] Falha ao salvar usuário: ' . $error->getMessage());
+}
+
 function crm_seed_default_admin_user(PDO $pdo): void
 {
     $config = require dirname(__DIR__) . '/config.php';
@@ -1749,7 +1768,7 @@ function crm_save_user(array $payload): array
             return ['ok' => false, 'error' => 'Este usuário já está em uso.'];
         }
 
-        error_log('[CRM] Falha ao salvar usuário: ' . $error->getMessage());
+        crm_record_user_save_error($error);
 
         return ['ok' => false, 'error' => 'Não foi possível salvar o usuário. Tente novamente; o erro foi registrado para diagnóstico.'];
     }
