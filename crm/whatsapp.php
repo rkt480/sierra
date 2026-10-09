@@ -1445,7 +1445,7 @@ if ($isWaConversationFragment) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="csrf-token" content="<?= htmlspecialchars($csrfToken) ?>" />
     <title>WhatsApp | Sierra</title>
-    <link rel="stylesheet" href="./assets/crm.css?v=20261008-fixed-bar-agencies-v1" />
+    <link rel="stylesheet" href="./assets/crm.css?v=20261008-topbar-clean-v1" />
   </head>
   <body class="whatsapp-page whatsapp-crm-page" data-wa-read-only="<?= $isAgency ? 'true' : 'false' ?>" data-wa-initial-view="<?= is_array($activeLead) ? 'thread' : 'inbox' ?>" data-wa-mobile-view="<?= is_array($activeLead) ? 'thread' : 'inbox' ?>" data-wa-active-lead-id="<?= htmlspecialchars((string) ($activeLead['id'] ?? '')) ?>" data-wa-incoming-signature="<?= htmlspecialchars(is_array($activeLead) ? crm_whatsapp_incoming_signature($activeLead) : '') ?>" data-wa-lead-feed-version="<?= htmlspecialchars($leadFeedVersion) ?>">
     <main class="wa-web-shell" aria-label="Atendimento WhatsApp do CRM">
