@@ -42,7 +42,7 @@ $isNew = $currentForm === null;
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="csrf-token" content="<?= htmlspecialchars(crm_csrf_token()) ?>" />
     <title>Formulários | CRM</title>
-    <link rel="stylesheet" href="./assets/crm.css?v=20261008-topbar-strip-v1" />
+    <link rel="stylesheet" href="./assets/crm.css?v=20261008-topbar-original-v1" />
   </head>
   <body>
     <div class="app-shell">

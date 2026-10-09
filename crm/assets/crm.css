@@ -272,20 +272,12 @@ a {
 }
 
 .topbar {
-  position: sticky;
-  top: 0;
-  z-index: 100;
   display: grid;
   align-items: center;
   justify-content: center;
   gap: 18px;
   margin: 4px 0 22px;
-  padding: 8px 10px;
-  background: rgba(248, 250, 252, 0.98);
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-  backdrop-filter: none;
+  padding: 0 10px;
 }
 
 .topbar-nav {
@@ -2399,29 +2391,7 @@ textarea:focus {
   }
 
   .topbar {
-    position: sticky;
-    top: 0;
-    display: block;
-    margin: 0 -14px 16px;
-    padding: 8px 14px;
-  }
-
-  .topbar-nav {
-    justify-content: flex-start;
-    flex-wrap: nowrap;
-    gap: 4px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .topbar-nav::-webkit-scrollbar {
     display: none;
-  }
-
-  .topbar-nav a {
-    flex: 0 0 auto;
-    padding: 11px 14px;
-    white-space: nowrap;
   }
 
   .app-header {

@@ -94,7 +94,7 @@ $overdueLeads = crm_read_sla_overdue_leads(20);
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Comercial | CRM</title>
-    <link rel="stylesheet" href="./assets/crm.css?v=20261008-topbar-strip-v1" />
+    <link rel="stylesheet" href="./assets/crm.css?v=20261008-topbar-original-v1" />
   </head>
   <body class="settings-page commercial-page">
     <div class="app-shell">
