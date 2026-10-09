@@ -11,6 +11,7 @@ crm_require_login();
 
 $canManageSales = crm_current_user_can_manage_sales();
 $canManageSettings = crm_current_user_is_admin();
+$isAgency = crm_current_user_is_agency();
 $assignableUsers = crm_read_assignable_users(false);
 $leads = crm_read_lead_summaries();
 $kanbanColumns = crm_read_kanban_columns();
@@ -140,9 +141,9 @@ foreach ($filteredLeads as $lead) {
     <title>CRM Sierra</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" sizes="180x180" href="./assets/icon-180.png?v=20260819-sierra-icon-v1" />
-    <link rel="stylesheet" href="./assets/crm.css?v=20260918-kanban-scroll-v1" />
+    <link rel="stylesheet" href="./assets/crm.css?v=20261008-agency-fixed-bar-v1" />
   </head>
-  <body class="leads-page">
+  <body class="leads-page" data-crm-read-only="<?= $isAgency ? 'true' : 'false' ?>">
     <div class="app-shell">
       <aside class="sidebar" aria-label="Navegação do CRM">
         <a class="brand" href="index.php" aria-label="Início">
@@ -189,6 +190,7 @@ foreach ($filteredLeads as $lead) {
       </aside>
 
       <div class="workspace">
+        <?php if (!$isAgency): ?>
         <header class="topbar">
           <nav class="topbar-nav" aria-label="Áreas do CRM">
             <a class="active" href="index.php">Contatos</a>
@@ -203,6 +205,7 @@ foreach ($filteredLeads as $lead) {
             <?php endif; ?>
           </nav>
         </header>
+        <?php endif; ?>
 
         <header class="app-header">
           <div>
@@ -213,7 +216,9 @@ foreach ($filteredLeads as $lead) {
             <?php if ($canManageSales): ?>
               <a href="followups.php">Criar fluxo</a>
             <?php endif; ?>
-            <button type="button" data-open-dialog="contact">Criar contato</button>
+            <?php if (!$isAgency): ?>
+              <button type="button" data-open-dialog="contact">Criar contato</button>
+            <?php endif; ?>
             <button type="button" class="<?= $filtersActive ? 'is-active' : '' ?>" data-open-dialog="filters">Filtrar</button>
             <?php if ($canManageSettings): ?>
               <button type="button" data-open-dialog="kanban">Editar kanban</button>
@@ -223,6 +228,7 @@ foreach ($filteredLeads as $lead) {
         </header>
 
     <main class="dashboard">
+      <?php if (!$isAgency): ?>
       <section class="push-onboarding" data-push-onboarding hidden>
         <div>
           <p class="eyebrow">Configuração rápida</p>
@@ -231,6 +237,7 @@ foreach ($filteredLeads as $lead) {
         </div>
         <button type="button" class="push-control" data-push-enable hidden>Ativar notificações</button>
       </section>
+      <?php endif; ?>
       <?php if ($scheduled): ?>
         <div class="alert success">Agendamento criado no Google Agenda.</div>
       <?php endif; ?>
@@ -243,6 +250,7 @@ foreach ($filteredLeads as $lead) {
         <div class="alert"><?= htmlspecialchars($leadErrorMessages[$leadError] ?? 'Não foi possível atualizar o lead.') ?></div>
       <?php endif; ?>
 
+      <?php if (!$isAgency): ?>
       <div class="utility-dialog" data-dialog="contact" hidden>
         <div class="utility-dialog-card">
           <header class="utility-dialog-header">
@@ -310,6 +318,7 @@ foreach ($filteredLeads as $lead) {
           </form>
         </div>
       </div>
+      <?php endif; ?>
 
       <div class="utility-dialog" data-dialog="filters" hidden>
         <div class="utility-dialog-card">
@@ -462,7 +471,9 @@ foreach ($filteredLeads as $lead) {
           <p>Ajuste os filtros para visualizar outros contatos do CRM.</p>
         </section>
       <?php else: ?>
-        <p class="mobile-kanban-hint">Toque e segure um lead para arrastá-lo para outra etapa.</p>
+        <?php if (!$isAgency): ?>
+          <p class="mobile-kanban-hint">Toque e segure um lead para arrastá-lo para outra etapa.</p>
+        <?php endif; ?>
         <section class="kanban-board" aria-label="Funil comercial em Kanban" style="grid-template-columns: repeat(<?= max(1, count($statusLabels)) ?>, minmax(285px, 1fr));">
           <?php foreach ($statusLabels as $status => $label): ?>
             <section class="kanban-column" data-status="<?= htmlspecialchars($status) ?>">
@@ -477,9 +488,10 @@ foreach ($filteredLeads as $lead) {
                 <?php foreach ($leadsByStatus[$status] as $lead): ?>
                   <article
                     class="lead-card kanban-card"
-                    draggable="true"
+                    draggable="<?= $isAgency ? 'false' : 'true' ?>"
                     data-lead-id="<?= htmlspecialchars((string) ($lead['id'] ?? '')) ?>"
                     data-lead-has-cpf="<?= crm_lead_has_cpf($lead) ? 'true' : 'false' ?>"
+                    data-read-only="<?= $isAgency ? 'true' : 'false' ?>"
                   >
                     <div class="lead-main">
                       <div>
@@ -501,6 +513,7 @@ foreach ($filteredLeads as $lead) {
                         </svg>
                       </a>
                       <button class="details-toggle" type="button" data-toggle-details>Detalhes</button>
+                      <?php if (!$isAgency): ?>
                       <label class="mobile-status-move">
                         Mover para
                         <select data-mobile-status aria-label="Mover lead para outra etapa">
@@ -509,6 +522,7 @@ foreach ($filteredLeads as $lead) {
                           <?php endforeach; ?>
                         </select>
                       </label>
+                      <?php endif; ?>
                       <?php if ($canManageSales): ?>
                         <form method="post" action="delete.php" onsubmit="return confirm('Excluir este contato?');">
                           <input type="hidden" name="_csrf_token" value="<?= htmlspecialchars(crm_csrf_token()) ?>" />
@@ -540,7 +554,7 @@ foreach ($filteredLeads as $lead) {
     </main>
       </div>
     </div>
-    <script src="./assets/crm.js?v=20260901-mobile-responsive-v2"></script>
+    <script src="./assets/crm.js?v=20261008-fixed-bar-agencies-v1"></script>
     <script src="./assets/crm-navigation.js?v=20260812-fast-navigation-v3"></script>
   </body>
 </html>

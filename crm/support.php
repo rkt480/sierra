@@ -25,6 +25,7 @@ $supportSections = [
             ['Administrador (master)', 'Tem acesso total ao CRM e pode visualizar e responder todas as conversas, independentemente do vendedor atribuído, além de gerenciar as regras sensíveis.'],
             ['Gestor', 'Acompanha a operação comercial e dashboards, sem mexer nas configurações administrativas.'],
             ['Vendedor', 'Enxerga somente leads e conversas atribuídos a ele, protegendo a carteira dos outros vendedores.'],
+            ['Agência (somente leitura)', 'Consulta todos os leads, sua origem e histórico, além das conversas do WhatsApp. Não pode editar dados, mover leads ou enviar mensagens.'],
             ['Conversas do WhatsApp', 'A aba de conversas respeita a mesma atribuição do lead: vendedor só vê conversa do próprio lead.'],
         ],
     ],
@@ -68,7 +69,7 @@ $implementationSteps = [
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Suporte Interno | CRM</title>
-    <link rel="stylesheet" href="./assets/crm.css?v=20260901-mobile-responsive-v2" />
+    <link rel="stylesheet" href="./assets/crm.css?v=20261008-fixed-bar-agencies-v1" />
   </head>
   <body class="settings-page support-page">
     <div class="app-shell">
@@ -145,8 +146,8 @@ $implementationSteps = [
             </div>
             <p>
               Esta página documenta os recursos criados para o controle comercial da Sierra:
-              vendedores, atribuição de leads, proteção por carteira, conversas vinculadas e
-              redistribuição quando um lead fica parado no kanban.
+              usuários comerciais, incluindo agência em modo de consulta, atribuição de leads,
+              proteção por carteira, conversas vinculadas e redistribuição quando um lead fica parado no kanban.
             </p>
           </section>
 

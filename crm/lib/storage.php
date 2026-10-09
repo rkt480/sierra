@@ -906,6 +906,7 @@ function crm_user_roles(): array
         'admin' => 'Administrador',
         'gestor' => 'Gestor comercial',
         'vendedor' => 'Vendedor',
+        'agencia' => 'Agência (somente leitura)',
     ];
 }
 
@@ -1391,7 +1392,7 @@ function crm_read_lead_timeline(array $lead): array
 function crm_user_can_manage_lead_scope(?array $user): bool
 {
     $role = (string) ($user['role'] ?? '');
-    return in_array($role, ['admin', 'gestor'], true);
+    return in_array($role, ['admin', 'gestor', 'agencia'], true);
 }
 
 function crm_lead_access_sql(string $alias = 'leads', bool $applyAccess = true): array
@@ -1595,7 +1596,7 @@ function crm_save_user(array $payload): array
     $role = crm_normalize_user_role((string) ($payload['role'] ?? 'vendedor'));
     $active = !empty($payload['active']) ? 1 : 0;
     $receiveLeadNotifications = !empty($payload['receive_lead_notifications']) ? 1 : 0;
-    $participates = !empty($payload['participates_in_rotation']) ? 1 : 0;
+    $participates = $role === 'agencia' ? 0 : (!empty($payload['participates_in_rotation']) ? 1 : 0);
     $weight = max(1, min(10, (int) ($payload['rotation_weight'] ?? 1)));
     $accessScheduleEnabled = !empty($payload['access_schedule_enabled']) ? 1 : 0;
     $accessStartTime = crm_normalize_user_access_time((string) ($payload['access_start_time'] ?? ''), '09:00:00');

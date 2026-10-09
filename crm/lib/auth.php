@@ -110,6 +110,45 @@ function crm_require_login(): void
         header('Location: ' . crm_login_path() . '?blocked=1');
         exit;
     }
+
+    if (!crm_agency_user_can_access_current_route()) {
+        crm_forbid('Seu perfil de agência tem acesso somente para consulta de leads e conversas.');
+    }
+}
+
+function crm_agency_user_can_access_current_route(): bool
+{
+    if (crm_current_user_role() !== 'agencia') {
+        return true;
+    }
+
+    $scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+    $scriptName = '/' . ltrim($scriptName, '/');
+    $allowedRoutes = [
+        '/index.php',
+        '/whatsapp.php',
+        '/api/lead-details.php',
+        '/api/lead-feed.php',
+        '/api/lead-profile-picture.php',
+        '/api/whatsapp-realtime.php',
+        '/login.php',
+        '/forgot-password.php',
+    ];
+
+    $isAllowedRoute = false;
+
+    foreach ($allowedRoutes as $route) {
+        if ($scriptName === $route || str_ends_with($scriptName, '/crm' . $route)) {
+            $isAllowedRoute = true;
+            break;
+        }
+    }
+
+    if (!$isAllowedRoute) {
+        return false;
+    }
+
+    return in_array(strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')), ['GET', 'HEAD'], true);
 }
 
 function crm_attempt_login(string $user, string $password): bool
@@ -395,6 +434,11 @@ function crm_current_user_can_manage_sales(): bool
 function crm_current_user_is_admin(): bool
 {
     return crm_current_user_role() === 'admin';
+}
+
+function crm_current_user_is_agency(): bool
+{
+    return crm_current_user_role() === 'agencia';
 }
 
 function crm_current_user_can_manage_whatsapp_templates(): bool

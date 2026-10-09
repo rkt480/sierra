@@ -4,6 +4,7 @@ const kanbanBoard = document.querySelector(".kanban-board");
 const mobileStatusControls = document.querySelectorAll("[data-mobile-status]");
 const dialogButtons = document.querySelectorAll("[data-open-dialog]");
 const csrfToken = document.querySelector("meta[name='csrf-token']")?.content || "";
+const isReadOnlyCRM = document.body.dataset.crmReadOnly === "true";
 
 let draggedCard = null;
 let boardScrollFrame = null;
@@ -389,7 +390,7 @@ function placeTouchCardInDropzone(card, zone, clientY) {
 }
 
 function beginTouchKanbanDrag(event) {
-  if (!isTouchKanbanEvent(event) || isKanbanInteractiveTarget(event.target)) {
+  if (isReadOnlyCRM || !isTouchKanbanEvent(event) || isKanbanInteractiveTarget(event.target)) {
     return;
   }
 
@@ -543,6 +544,10 @@ async function finishTouchKanbanDrag(event, cancelled = false) {
 
 cards.forEach((card) => {
   card.addEventListener("dragstart", () => {
+    if (isReadOnlyCRM) {
+      return;
+    }
+
     draggedCard = card;
     card.classList.add("is-dragging");
   });
@@ -583,7 +588,7 @@ if (!window.PointerEvent) {
 const syncMobileDraggable = () => {
   const isMobile = window.matchMedia("(max-width: 880px), (pointer: coarse)").matches;
   cards.forEach((card) => {
-    card.draggable = !isMobile;
+    card.draggable = !isMobile && card.dataset.readOnly !== "true";
   });
 };
 
@@ -1613,7 +1618,7 @@ if (installButton) {
   });
 }
 
-if ("serviceWorker" in navigator) {
+if (!isReadOnlyCRM && "serviceWorker" in navigator) {
   navigator.serviceWorker.addEventListener("message", (event) => {
     if (event.data?.type !== "crm-push-subscription-changed") {
       return;
@@ -1643,7 +1648,7 @@ if ("serviceWorker" in navigator) {
     void syncPushState();
   }, 5 * 60 * 1000);
 
-  navigator.serviceWorker.register("./sw.js?v=20260901-mobile-responsive-v2", {
+  navigator.serviceWorker.register("./sw.js?v=20261008-fixed-bar-agencies-v1", {
     scope: "./",
     updateViaCache: "none",
   })

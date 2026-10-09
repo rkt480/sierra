@@ -7,6 +7,7 @@ require_once dirname(__DIR__) . '/lib/storage.php';
 require_once dirname(__DIR__) . '/lib/pilot-status.php';
 
 crm_require_login();
+$isAgency = crm_current_user_is_agency();
 
 // Profile lookup may call the external provider. Release the session lock so
 // several visible avatars do not serialize the rest of the CRM requests.
@@ -53,7 +54,7 @@ if (
 $result = pilot_status_fetch_profile_picture_url((string) ($lead['whatsapp'] ?? ''));
 $profilePictureUrl = crm_normalize_profile_picture_url((string) ($result['profile_picture_url'] ?? ''));
 
-if ($profilePictureUrl !== '' && $profilePictureUrl !== $currentUrl) {
+if (!$isAgency && $profilePictureUrl !== '' && $profilePictureUrl !== $currentUrl) {
     crm_update_lead_profile_picture($leadId, $profilePictureUrl);
 }
 

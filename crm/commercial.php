@@ -94,7 +94,7 @@ $overdueLeads = crm_read_sla_overdue_leads(20);
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Comercial | CRM</title>
-    <link rel="stylesheet" href="./assets/crm.css?v=20260901-mobile-responsive-v2" />
+    <link rel="stylesheet" href="./assets/crm.css?v=20261008-fixed-bar-agencies-v1" />
   </head>
   <body class="settings-page commercial-page">
     <div class="app-shell">
@@ -226,6 +226,7 @@ $overdueLeads = crm_read_sla_overdue_leads(20);
                         <option value="<?= htmlspecialchars($role) ?>" <?= $role === 'vendedor' ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
                       <?php endforeach; ?>
                     </select>
+                    <small class="commercial-help">O perfil Agência consulta todos os leads e conversas, sem editar, mover cards ou enviar mensagens.</small>
                   </label>
                   <label>
                     Senha inicial
@@ -333,6 +334,7 @@ $overdueLeads = crm_read_sla_overdue_leads(20);
                                 <option value="<?= htmlspecialchars($role) ?>" <?= (string) ($crmUser['role'] ?? '') === $role ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
                               <?php endforeach; ?>
                             </select>
+                            <small class="commercial-help">O perfil Agência consulta todos os leads e conversas, sem editar, mover cards ou enviar mensagens.</small>
                           </label>
                           <label>
                             Nova senha
@@ -486,6 +488,24 @@ $overdueLeads = crm_read_sla_overdue_leads(20);
         </main>
       </div>
     </div>
+    <script>
+      document.querySelectorAll("form.commercial-form").forEach((form) => {
+        const role = form.elements.namedItem("role");
+        const rotation = form.elements.namedItem("participates_in_rotation");
+
+        if (!role || !rotation) return;
+
+        const syncRotationAccess = () => {
+          const isAgency = role.value === "agencia";
+          rotation.disabled = isAgency;
+
+          if (isAgency) rotation.checked = false;
+        };
+
+        role.addEventListener("change", syncRotationAccess);
+        syncRotationAccess();
+      });
+    </script>
     <script src="./assets/crm-navigation.js?v=20260812-fast-navigation-v3"></script>
   </body>
 </html>

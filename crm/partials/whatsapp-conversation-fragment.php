@@ -1,3 +1,7 @@
+<?php
+require_once dirname(__DIR__) . '/lib/auth.php';
+crm_require_login();
+?>
 <section class="wa-thread" aria-label="Conversa selecionada">
   <?php if (!is_array($activeLead)): ?>
     <div class="wa-no-thread">
@@ -27,7 +31,7 @@
 
       <?php if (count($activeMessages) === 0): ?>
         <div class="wa-message wa-message-note">
-          <p>Este contato ainda não tem mensagens registradas. Envie uma mensagem para iniciar o histórico.</p>
+          <p><?= $isAgency ? 'Este contato ainda não tem mensagens registradas.' : 'Este contato ainda não tem mensagens registradas. Envie uma mensagem para iniciar o histórico.' ?></p>
         </div>
       <?php endif; ?>
 
@@ -56,12 +60,17 @@
     </div>
 
     <div class="wa-thread-bottom">
-      <div class="wa-window-banner <?= $wa24hOpen ? 'is-open' : 'is-closed' ?>">
-        <span class="wa-window-icon"><?= $wa24hOpen ? '✓' : '!' ?></span>
-        <div><strong><?= $wa24hOpen ? 'Resposta livre liberada' : 'Janela de 24 horas encerrada' ?></strong><span><?= htmlspecialchars($waWindowLabel) ?></span></div>
-      </div>
+      <?php if (!$isAgency): ?>
+        <div class="wa-window-banner <?= $wa24hOpen ? 'is-open' : 'is-closed' ?>">
+          <span class="wa-window-icon"><?= $wa24hOpen ? '✓' : '!' ?></span>
+          <div><strong><?= $wa24hOpen ? 'Resposta livre liberada' : 'Janela de 24 horas encerrada' ?></strong><span><?= htmlspecialchars($waWindowLabel) ?></span></div>
+        </div>
+      <?php endif; ?>
+      <?php if ($isAgency): ?>
+        <div class="wa-readonly-banner" role="status">Acesso de agência: conversa disponível somente para consulta.</div>
+      <?php endif; ?>
 
-      <?php if (!$wa24hOpen): ?>
+      <?php if (!$isAgency && !$wa24hOpen): ?>
         <section class="wa-template-picker" data-wa-template-picker>
           <div class="wa-template-picker-heading"><div><p class="eyebrow"><?= $provider === 'pilot_status' ? 'Pilot Status' : 'API oficial' ?></p><strong>Enviar template aprovado</strong></div><span><?= $provider === 'pilot_status' ? 'Pilot' : 'Meta' ?></span></div>
           <form method="post" action="send-whatsapp-template.php" data-wa-template-form>
@@ -76,6 +85,7 @@
         </section>
       <?php endif; ?>
 
+      <?php if (!$isAgency): ?>
       <form class="wa-composer <?= $wa24hOpen ? '' : 'is-locked' ?>" method="post" action="send-chat-message.php" enctype="multipart/form-data" data-wa-composer <?= $wa24hOpen ? '' : 'aria-disabled="true"' ?> <?= $wa24hOpen ? '' : 'hidden' ?>>
         <div class="wa-composer-tools">
           <label class="wa-tool-button" for="wa-media-input" title="Anexar imagem, áudio, vídeo ou documento" data-wa-attach aria-label="Anexar imagem, áudio, vídeo ou documento" tabindex="0">
@@ -128,6 +138,7 @@
           </svg>
         </button>
       </form>
+      <?php endif; ?>
     </div>
   <?php endif; ?>
 </section>
@@ -164,7 +175,7 @@
           <dt>Vendedor</dt>
           <dd><?= htmlspecialchars(trim((string) ($activeLead['assigned_user_name'] ?? '')) !== '' ? (string) $activeLead['assigned_user_name'] : 'Sem vendedor') ?></dd>
         </div>
-        <?php if ($canManageSettings): ?>
+        <?php if ($canManageSettings || $isAgency): ?>
           <div>
             <dt>Origem</dt>
             <dd><?= htmlspecialchars(whatsapp_page_origin_summary($activeLead)) ?></dd>
@@ -181,6 +192,37 @@
       </dl>
     </section>
 
+    <?php if ($isAgency): ?>
+      <section class="wa-lead-block">
+        <h3>Informações comerciais</h3>
+        <dl class="wa-lead-details">
+          <div>
+            <dt>Etapa</dt>
+            <dd><?= htmlspecialchars(crm_kanban_status_label((string) ($activeLead['status'] ?? 'novo'))) ?></dd>
+          </div>
+          <div>
+            <dt>Valor da proposta</dt>
+            <dd><?= htmlspecialchars(whatsapp_page_money_input($activeLead, 'proposal_value') ?: 'Não informado') ?></dd>
+          </div>
+          <div>
+            <dt>Previsão de fechamento</dt>
+            <dd><?= htmlspecialchars(trim((string) ($activeLead['expected_close_date'] ?? '')) ?: 'Não informada') ?></dd>
+          </div>
+          <div>
+            <dt>Motivo de perda</dt>
+            <dd><?= htmlspecialchars(trim((string) ($activeLead['lost_reason'] ?? '')) ?: 'Não informado') ?></dd>
+          </div>
+          <div class="field-wide">
+            <dt>Tags</dt>
+            <dd><?= htmlspecialchars(implode(', ', $activeLeadTags) ?: 'Nenhuma') ?></dd>
+          </div>
+          <div class="field-wide">
+            <dt>Observações do vendedor</dt>
+            <dd><?= nl2br(htmlspecialchars(trim((string) ($activeLead['commercial_notes'] ?? '')) ?: 'Nenhuma observação.')) ?></dd>
+          </div>
+        </dl>
+      </section>
+    <?php else: ?>
     <section class="wa-lead-block">
       <h3>Dados do contato</h3>
       <form class="wa-side-form" method="post" action="update.php">
@@ -326,9 +368,10 @@
             Enviar convite pelo Google Agenda
           </label>
           <button type="submit">Agendar</button>
-        </form>
+      </form>
       <?php endif; ?>
     </section>
+    <?php endif; ?>
 
     <section class="wa-lead-actions">
       <a class="secondary-action" href="index.php?q=<?= urlencode((string) ($activeLead['whatsapp'] ?? '')) ?>" data-no-navigation-prefetch>Abrir no kanban</a>

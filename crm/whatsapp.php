@@ -16,6 +16,7 @@ $currentUser = crm_current_user();
 $currentUserId = (int) ($currentUser['id'] ?? 0);
 $canManageSales = crm_current_user_can_manage_sales();
 $canManageSettings = crm_current_user_is_admin();
+$isAgency = crm_current_user_is_agency();
 $csrfToken = crm_csrf_token();
 
 // Do not keep the PHP session locked while the inbox is being assembled.
@@ -35,7 +36,7 @@ $provider = crm_whatsapp_provider();
 $providerLabel = crm_whatsapp_provider_label($provider);
 $metaConfigured = crm_meta_whatsapp_is_configured();
 $pilotStatusConfigured = crm_pilot_status_is_configured();
-$followupFlows = crm_read_followup_flows(true);
+$followupFlows = $isAgency ? [] : crm_read_followup_flows(true);
 $googleCalendarConnected = crm_google_calendar_is_connected();
 $sent = ($_GET['sent'] ?? '') === '1';
 $sendError = trim((string) ($_GET['send_error'] ?? ''));
@@ -1388,7 +1389,7 @@ if (is_array($activeConversation)) {
     usort($activeMessages, 'whatsapp_page_compare_messages');
 }
 
-if (is_array($activeConversation) && $currentUserId > 0) {
+if (!$isAgency && is_array($activeConversation) && $currentUserId > 0) {
     crm_mark_whatsapp_conversation_read(
         $currentUserId,
         (string) ($activeConversation['conversation_key'] ?? ''),
@@ -1398,7 +1399,7 @@ if (is_array($activeConversation) && $currentUserId > 0) {
 
 $activeProvider = is_array($activeConversation) ? (string) $activeConversation['provider'] : $provider;
 $leadFeedVersion = whatsapp_page_lead_feed_version($leads);
-$whatsappTemplates = crm_read_whatsapp_templates(true);
+$whatsappTemplates = $isAgency ? [] : crm_read_whatsapp_templates(true);
 $hasApprovedWhatsAppTemplate = false;
 
 foreach ($whatsappTemplates as $template) {
@@ -1444,9 +1445,9 @@ if ($isWaConversationFragment) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="csrf-token" content="<?= htmlspecialchars($csrfToken) ?>" />
     <title>WhatsApp | Sierra</title>
-    <link rel="stylesheet" href="./assets/crm.css?v=20260901-mobile-responsive-v2" />
+    <link rel="stylesheet" href="./assets/crm.css?v=20261008-fixed-bar-agencies-v1" />
   </head>
-  <body class="whatsapp-page whatsapp-crm-page" data-wa-initial-view="<?= is_array($activeLead) ? 'thread' : 'inbox' ?>" data-wa-mobile-view="<?= is_array($activeLead) ? 'thread' : 'inbox' ?>" data-wa-active-lead-id="<?= htmlspecialchars((string) ($activeLead['id'] ?? '')) ?>" data-wa-incoming-signature="<?= htmlspecialchars(is_array($activeLead) ? crm_whatsapp_incoming_signature($activeLead) : '') ?>" data-wa-lead-feed-version="<?= htmlspecialchars($leadFeedVersion) ?>">
+  <body class="whatsapp-page whatsapp-crm-page" data-wa-read-only="<?= $isAgency ? 'true' : 'false' ?>" data-wa-initial-view="<?= is_array($activeLead) ? 'thread' : 'inbox' ?>" data-wa-mobile-view="<?= is_array($activeLead) ? 'thread' : 'inbox' ?>" data-wa-active-lead-id="<?= htmlspecialchars((string) ($activeLead['id'] ?? '')) ?>" data-wa-incoming-signature="<?= htmlspecialchars(is_array($activeLead) ? crm_whatsapp_incoming_signature($activeLead) : '') ?>" data-wa-lead-feed-version="<?= htmlspecialchars($leadFeedVersion) ?>">
     <main class="wa-web-shell" aria-label="Atendimento WhatsApp do CRM">
       <aside class="sidebar" aria-label="Navegação do CRM">
         <a class="brand" href="index.php" aria-label="Início" data-no-navigation-prefetch>
@@ -1603,7 +1604,7 @@ if ($isWaConversationFragment) {
 
             <?php if (count($activeMessages) === 0): ?>
               <div class="wa-message wa-message-note">
-                <p>Este contato ainda não tem mensagens registradas. Envie uma mensagem para iniciar o histórico.</p>
+                <p><?= $isAgency ? 'Este contato ainda não tem mensagens registradas.' : 'Este contato ainda não tem mensagens registradas. Envie uma mensagem para iniciar o histórico.' ?></p>
               </div>
             <?php endif; ?>
 
@@ -1632,12 +1633,17 @@ if ($isWaConversationFragment) {
           </div>
 
           <div class="wa-thread-bottom">
-            <div class="wa-window-banner <?= $wa24hOpen ? 'is-open' : 'is-closed' ?>">
-              <span class="wa-window-icon"><?= $wa24hOpen ? '✓' : '!' ?></span>
-              <div><strong><?= $wa24hOpen ? 'Resposta livre liberada' : 'Janela de 24 horas encerrada' ?></strong><span><?= htmlspecialchars($waWindowLabel) ?></span></div>
-            </div>
+            <?php if (!$isAgency): ?>
+              <div class="wa-window-banner <?= $wa24hOpen ? 'is-open' : 'is-closed' ?>">
+                <span class="wa-window-icon"><?= $wa24hOpen ? '✓' : '!' ?></span>
+                <div><strong><?= $wa24hOpen ? 'Resposta livre liberada' : 'Janela de 24 horas encerrada' ?></strong><span><?= htmlspecialchars($waWindowLabel) ?></span></div>
+              </div>
+            <?php endif; ?>
+            <?php if ($isAgency): ?>
+              <div class="wa-readonly-banner" role="status">Acesso de agência: conversa disponível somente para consulta.</div>
+            <?php endif; ?>
 
-            <?php if (!$wa24hOpen): ?>
+            <?php if (!$isAgency && !$wa24hOpen): ?>
               <section class="wa-template-picker" data-wa-template-picker>
                 <div class="wa-template-picker-heading"><div><p class="eyebrow"><?= $provider === 'pilot_status' ? 'Pilot Status' : 'API oficial' ?></p><strong>Enviar template aprovado</strong></div><span><?= $provider === 'pilot_status' ? 'Pilot' : 'Meta' ?></span></div>
                 <form method="post" action="send-whatsapp-template.php" data-wa-template-form>
@@ -1652,6 +1658,7 @@ if ($isWaConversationFragment) {
               </section>
             <?php endif; ?>
 
+            <?php if (!$isAgency): ?>
             <form class="wa-composer <?= $wa24hOpen ? '' : 'is-locked' ?>" method="post" action="send-chat-message.php" enctype="multipart/form-data" data-wa-composer <?= $wa24hOpen ? '' : 'aria-disabled="true"' ?> <?= $wa24hOpen ? '' : 'hidden' ?>>
             <div class="wa-composer-tools">
               <label class="wa-tool-button" for="wa-media-input" title="Anexar imagem, áudio, vídeo ou documento" data-wa-attach aria-label="Anexar imagem, áudio, vídeo ou documento" tabindex="0">
@@ -1704,6 +1711,7 @@ if ($isWaConversationFragment) {
               </svg>
             </button>
             </form>
+            <?php endif; ?>
           </div>
         <?php endif; ?>
       </section>
@@ -1740,7 +1748,7 @@ if ($isWaConversationFragment) {
                 <dt>Vendedor</dt>
                 <dd><?= htmlspecialchars(trim((string) ($activeLead['assigned_user_name'] ?? '')) !== '' ? (string) $activeLead['assigned_user_name'] : 'Sem vendedor') ?></dd>
               </div>
-              <?php if ($canManageSettings): ?>
+              <?php if ($canManageSettings || $isAgency): ?>
                 <div>
                   <dt>Origem</dt>
                   <dd><?= htmlspecialchars(whatsapp_page_origin_summary($activeLead)) ?></dd>
@@ -1757,6 +1765,37 @@ if ($isWaConversationFragment) {
             </dl>
           </section>
 
+          <?php if ($isAgency): ?>
+            <section class="wa-lead-block">
+              <h3>Informações comerciais</h3>
+              <dl class="wa-lead-details">
+                <div>
+                  <dt>Etapa</dt>
+                  <dd><?= htmlspecialchars(crm_kanban_status_label((string) ($activeLead['status'] ?? 'novo'))) ?></dd>
+                </div>
+                <div>
+                  <dt>Valor da proposta</dt>
+                  <dd><?= htmlspecialchars(whatsapp_page_money_input($activeLead, 'proposal_value') ?: 'Não informado') ?></dd>
+                </div>
+                <div>
+                  <dt>Previsão de fechamento</dt>
+                  <dd><?= htmlspecialchars(trim((string) ($activeLead['expected_close_date'] ?? '')) ?: 'Não informada') ?></dd>
+                </div>
+                <div>
+                  <dt>Motivo de perda</dt>
+                  <dd><?= htmlspecialchars(trim((string) ($activeLead['lost_reason'] ?? '')) ?: 'Não informado') ?></dd>
+                </div>
+                <div class="field-wide">
+                  <dt>Tags</dt>
+                  <dd><?= htmlspecialchars(implode(', ', crm_decode_lead_tags($activeLead)) ?: 'Nenhuma') ?></dd>
+                </div>
+                <div class="field-wide">
+                  <dt>Observações do vendedor</dt>
+                  <dd><?= nl2br(htmlspecialchars(trim((string) ($activeLead['commercial_notes'] ?? '')) ?: 'Nenhuma observação.')) ?></dd>
+                </div>
+              </dl>
+            </section>
+          <?php else: ?>
           <section class="wa-lead-block">
             <h3>Dados do contato</h3>
             <form class="wa-side-form" method="post" action="update.php">
@@ -1905,6 +1944,7 @@ if ($isWaConversationFragment) {
               </form>
             <?php endif; ?>
           </section>
+          <?php endif; ?>
 
           <section class="wa-lead-actions">
             <a class="secondary-action" href="index.php?q=<?= urlencode((string) ($activeLead['whatsapp'] ?? '')) ?>" data-no-navigation-prefetch>Abrir no kanban</a>
@@ -2415,7 +2455,7 @@ if ($isWaConversationFragment) {
       // O service worker continua responsável pelas notificações do CRM. A
       // atualização da conversa usa a escuta de evento abaixo, que funciona
       // mesmo quando as notificações do navegador não estão habilitadas.
-      if ("serviceWorker" in navigator) {
+      if (document.body.dataset.waReadOnly !== "true" && "serviceWorker" in navigator) {
         const waPushCsrfToken = document.querySelector("meta[name='csrf-token']")?.content || "";
 
         const syncWaPushSubscription = async (subscriptionOverride = null) => {
@@ -2467,7 +2507,7 @@ if ($isWaConversationFragment) {
         });
         window.setInterval(() => syncWaPushSubscription().catch(() => {}), 5 * 60 * 1000);
 
-        navigator.serviceWorker.register("./sw.js?v=20260901-mobile-responsive-v2", {
+        navigator.serviceWorker.register("./sw.js?v=20261008-fixed-bar-agencies-v1", {
           scope: "./",
           updateViaCache: "none",
         }).then(() => syncWaPushSubscription()).catch(() => {});
