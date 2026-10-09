@@ -141,7 +141,7 @@ foreach ($filteredLeads as $lead) {
     <title>CRM Sierra</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" sizes="180x180" href="./assets/icon-180.png?v=20260819-sierra-icon-v1" />
-    <link rel="stylesheet" href="./assets/crm.css?v=20261008-topbar-clean-v1" />
+    <link rel="stylesheet" href="./assets/crm.css?v=20261008-topbar-strip-v1" />
   </head>
   <body class="leads-page" data-crm-read-only="<?= $isAgency ? 'true' : 'false' ?>">
     <div class="app-shell">

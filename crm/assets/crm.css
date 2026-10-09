@@ -281,7 +281,7 @@ a {
   gap: 18px;
   margin: 4px 0 22px;
   padding: 8px 10px;
-  background: transparent;
+  background: rgba(248, 250, 252, 0.98);
   border: 0;
   border-radius: 0;
   box-shadow: none;
