@@ -332,7 +332,7 @@ foreach ($filteredLeads as $lead) {
           <form class="utility-form" method="get" action="index.php">
             <label class="field-wide">
               Buscar
-              <input type="search" name="q" value="<?= htmlspecialchars($filterQuery) ?>" placeholder="Nome, CPF, telefone, tag ou observação" />
+              <input type="search" name="q" value="<?= htmlspecialchars($filterQuery) ?>" placeholder="Nome, CPF, telefone, etiqueta ou observação" />
             </label>
             <label>
               Data inicial
@@ -352,7 +352,7 @@ foreach ($filteredLeads as $lead) {
               </select>
             </label>
             <label>
-              Tag
+              Etiquetas
               <select name="tag">
                 <option value="">Todas</option>
                 <?php foreach ($availableTags as $tag): ?>

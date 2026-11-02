@@ -543,11 +543,13 @@ function pilot_status_send_template(string $number, array $template, array $vari
         return ['ok' => false, 'error' => 'ID do template no Pilot Status não configurado.'];
     }
 
+    // Template sends can take longer while Pilot Status forwards the request
+    // to Meta. The default 20s timeout caused false failures on slow replies.
     return pilot_status_request('/messages/send', [
         'templateId' => $templateId,
         'destinationNumber' => $to,
         'variables' => $variables,
-    ]);
+    ], 60);
 }
 
 function pilot_status_extract_delivery_event(array $payload): array

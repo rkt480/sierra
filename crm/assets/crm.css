@@ -5153,6 +5153,10 @@ textarea:focus {
   text-decoration: none;
 }
 
+.whatsapp-crm-page .wa-chat-item[hidden] {
+  display: none !important;
+}
+
 .whatsapp-crm-page .wa-message footer {
   display: flex;
   justify-content: flex-end;
@@ -6372,6 +6376,10 @@ textarea:focus {
     /* Keep the normal mobile layout compact. Extra clearance is enabled only
        while the keyboard is open, when Android can cover the focused field. */
     --wa-mobile-bottom-clearance: max(10px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .whatsapp-crm-page .wa-search input {
+    font-size: 16px;
   }
 
   html:has(body.whatsapp-crm-page) {

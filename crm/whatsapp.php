@@ -1445,7 +1445,7 @@ if ($isWaConversationFragment) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="csrf-token" content="<?= htmlspecialchars($csrfToken) ?>" />
     <title>WhatsApp | Sierra</title>
-    <link rel="stylesheet" href="./assets/crm.css?v=20261008-topbar-original-v1" />
+    <link rel="stylesheet" href="./assets/crm.css?v=20261102-wa-search-labels-v1" />
   </head>
   <body class="whatsapp-page whatsapp-crm-page" data-wa-read-only="<?= $isAgency ? 'true' : 'false' ?>" data-wa-initial-view="<?= is_array($activeLead) ? 'thread' : 'inbox' ?>" data-wa-mobile-view="<?= is_array($activeLead) ? 'thread' : 'inbox' ?>" data-wa-active-lead-id="<?= htmlspecialchars((string) ($activeLead['id'] ?? '')) ?>" data-wa-incoming-signature="<?= htmlspecialchars(is_array($activeLead) ? crm_whatsapp_incoming_signature($activeLead) : '') ?>" data-wa-lead-feed-version="<?= htmlspecialchars($leadFeedVersion) ?>">
     <main class="wa-web-shell" aria-label="Atendimento WhatsApp do CRM">
@@ -1555,6 +1555,7 @@ if ($isWaConversationFragment) {
               data-no-navigation-prefetch
               data-wa-chat
               data-wa-lead-id="<?= htmlspecialchars($leadId) ?>"
+              data-phone="<?= htmlspecialchars((string) ($lead['whatsapp'] ?? '')) ?>"
               data-wa-last-key="<?= htmlspecialchars(hash('sha256', (string) ($conversation['last_message_key'] ?? ''))) ?>"
               data-wa-last-direction="<?= htmlspecialchars((string) ($conversation['last_direction'] ?? '')) ?>"
               data-search="<?= htmlspecialchars(strtolower($leadName . ' ' . (string) ($lead['whatsapp'] ?? '') . ' ' . (string) $conversation['preview'])) ?>"
@@ -1778,15 +1779,11 @@ if ($isWaConversationFragment) {
                   <dd><?= htmlspecialchars(whatsapp_page_money_input($activeLead, 'proposal_value') ?: 'Não informado') ?></dd>
                 </div>
                 <div>
-                  <dt>Previsão de fechamento</dt>
-                  <dd><?= htmlspecialchars(trim((string) ($activeLead['expected_close_date'] ?? '')) ?: 'Não informada') ?></dd>
-                </div>
-                <div>
                   <dt>Motivo de perda</dt>
                   <dd><?= htmlspecialchars(trim((string) ($activeLead['lost_reason'] ?? '')) ?: 'Não informado') ?></dd>
                 </div>
                 <div class="field-wide">
-                  <dt>Tags</dt>
+                  <dt>Etiquetas</dt>
                   <dd><?= htmlspecialchars(implode(', ', crm_decode_lead_tags($activeLead)) ?: 'Nenhuma') ?></dd>
                 </div>
                 <div class="field-wide">
@@ -1820,7 +1817,7 @@ if ($isWaConversationFragment) {
           </section>
 
           <section class="wa-lead-block">
-            <h3>Valores e previsão</h3>
+            <h3>Valores da proposta</h3>
             <form class="wa-side-form" method="post" action="update.php">
               <input type="hidden" name="_csrf_token" value="<?= htmlspecialchars($csrfToken) ?>" />
               <input type="hidden" name="id" value="<?= htmlspecialchars((string) ($activeLead['id'] ?? '')) ?>" />
@@ -1830,16 +1827,12 @@ if ($isWaConversationFragment) {
                 Valor da proposta
                 <input type="text" name="proposal_value" value="<?= htmlspecialchars(whatsapp_page_money_input($activeLead, 'proposal_value')) ?>" inputmode="numeric" autocomplete="off" placeholder="R$ 0,00" data-currency-input />
               </label>
-              <label>
-                Previsão de fechamento
-                <input type="date" name="expected_close_date" value="<?= htmlspecialchars((string) ($activeLead['expected_close_date'] ?? '')) ?>" />
-              </label>
               <button type="submit">Salvar proposta</button>
             </form>
           </section>
 
           <section class="wa-lead-block">
-            <h3>Tags e observações do vendedor</h3>
+            <h3>Etiquetas e observações do vendedor</h3>
             <form class="wa-side-form" method="post" action="update.php">
               <input type="hidden" name="_csrf_token" value="<?= htmlspecialchars($csrfToken) ?>" />
               <input type="hidden" name="id" value="<?= htmlspecialchars((string) ($activeLead['id'] ?? '')) ?>" />
@@ -1850,16 +1843,16 @@ if ($isWaConversationFragment) {
                   <?php foreach ($activeLeadTags as $tag): ?>
                     <span>
                       <?= htmlspecialchars($tag) ?>
-                      <button type="submit" name="remove_tag" value="<?= htmlspecialchars($tag) ?>" class="tag-preview-remove" data-wa-tag-remove="<?= htmlspecialchars($tag) ?>" title="Remover tag <?= htmlspecialchars($tag) ?>" aria-label="Remover tag <?= htmlspecialchars($tag) ?>">×</button>
+                      <button type="submit" name="remove_tag" value="<?= htmlspecialchars($tag) ?>" class="tag-preview-remove" data-wa-tag-remove="<?= htmlspecialchars($tag) ?>" title="Remover etiqueta <?= htmlspecialchars($tag) ?>" aria-label="Remover etiqueta <?= htmlspecialchars($tag) ?>">×</button>
                     </span>
                   <?php endforeach; ?>
                 </span>
                 <label>
-                  Tags
+                  Etiquetas
                   <input type="text" name="tags" value="<?= htmlspecialchars(implode(', ', $activeLeadTags)) ?>" placeholder="quente, proposta, retorno" data-tags-input />
                 </label>
               </div>
-              <button type="submit">Salvar tags</button>
+              <button type="submit">Salvar etiquetas</button>
             </form>
             <form class="wa-side-form" method="post" action="update.php">
               <input type="hidden" name="_csrf_token" value="<?= htmlspecialchars($csrfToken) ?>" />
@@ -2155,7 +2148,7 @@ if ($isWaConversationFragment) {
 
         const messageFocused = document.activeElement?.matches("[data-wa-message]");
         const templateFieldFocused = document.activeElement?.matches("[data-wa-template-fields] input");
-        const keyboardOpen = messageFocused || templateFieldFocused || window.innerHeight - viewport.height > 120;
+        const keyboardOpen = messageFocused || templateFieldFocused;
         document.body.classList.toggle("wa-keyboard-open", keyboardOpen);
 
         if (keyboardOpen) {
@@ -2211,10 +2204,22 @@ if ($isWaConversationFragment) {
           return;
         }
 
-        const query = searchInput.value.trim().toLocaleLowerCase("pt-BR");
+        const rawQuery = searchInput.value.trim();
+        const normalizeText = (value) => String(value || "")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLocaleLowerCase("pt-BR");
+        const query = normalizeText(rawQuery);
+        const queryDigits = rawQuery.replace(/\D/g, "");
 
         document.querySelectorAll("[data-wa-chat]").forEach((chat) => {
-          chat.hidden = query !== "" && !chat.dataset.search.includes(query);
+          const searchableText = normalizeText(chat.dataset.search || chat.textContent);
+          const phoneDigits = String(chat.dataset.phone || "").replace(/\D/g, "");
+          const searchableDigits = searchableText.replace(/\D/g, "");
+          const matchesText = query !== "" && searchableText.includes(query);
+          const matchesPhone = queryDigits !== ""
+            && (phoneDigits.includes(queryDigits) || searchableDigits.includes(queryDigits));
+          chat.hidden = rawQuery !== "" && !matchesText && !matchesPhone;
         });
       };
 
@@ -3349,8 +3354,8 @@ if ($isWaConversationFragment) {
             removeButton.value = tag;
             removeButton.className = "tag-preview-remove";
             removeButton.dataset.waTagRemove = tag;
-            removeButton.title = `Remover tag ${tag}`;
-            removeButton.setAttribute("aria-label", `Remover tag ${tag}`);
+            removeButton.title = `Remover etiqueta ${tag}`;
+            removeButton.setAttribute("aria-label", `Remover etiqueta ${tag}`);
             removeButton.textContent = "×";
             chip.appendChild(removeButton);
             waTagsPreview.appendChild(chip);

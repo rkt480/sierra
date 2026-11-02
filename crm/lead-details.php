@@ -72,7 +72,7 @@ $leadFormAnswers = $isAgency ? [] : crm_read_lead_form_answer_rows($lead);
               <dd><?= nl2br(htmlspecialchars(trim((string) ($lead['message'] ?? '')) ?: 'Sem mensagem registrada.')) ?></dd>
             </div>
             <div class="field-wide">
-              <dt>Tags</dt>
+              <dt>Etiquetas</dt>
               <dd><?= htmlspecialchars(implode(', ', $visibleLeadTags) ?: 'Nenhuma') ?></dd>
             </div>
           </dl>
@@ -184,10 +184,6 @@ $leadFormAnswers = $isAgency ? [] : crm_read_lead_form_answer_rows($lead);
               <dd><?= htmlspecialchars(lead_money_input($lead, 'proposal_value') ?: 'Não informado') ?></dd>
             </div>
             <div>
-              <dt>Previsão de fechamento</dt>
-              <dd><?= htmlspecialchars(trim((string) ($lead['expected_close_date'] ?? '')) ?: 'Não informada') ?></dd>
-            </div>
-            <div>
               <dt>Motivo de perda</dt>
               <dd><?= htmlspecialchars(trim((string) ($lead['lost_reason'] ?? '')) ?: 'Não informado') ?></dd>
             </div>
@@ -196,7 +192,7 @@ $leadFormAnswers = $isAgency ? [] : crm_read_lead_form_answer_rows($lead);
               <dd><?= nl2br(htmlspecialchars(trim((string) ($lead['commercial_notes'] ?? '')) ?: 'Nenhuma observação.')) ?></dd>
             </div>
             <div class="field-wide">
-              <dt>Tags</dt>
+              <dt>Etiquetas</dt>
               <dd><?= htmlspecialchars(implode(', ', $visibleLeadTags) ?: 'Nenhuma') ?></dd>
             </div>
             <?php if (!empty($lead['whatsapp_error'])): ?>
@@ -236,7 +232,7 @@ $leadFormAnswers = $isAgency ? [] : crm_read_lead_form_answer_rows($lead);
           <?php endif; ?>
 
           <section class="commercial-block field-wide">
-            <h3>Valores e previsão</h3>
+            <h3>Valores da proposta</h3>
             <form class="update-form lead-contact-edit" method="post" action="update.php">
               <input type="hidden" name="_csrf_token" value="<?= htmlspecialchars(crm_csrf_token()) ?>" />
               <input type="hidden" name="id" value="<?= htmlspecialchars((string) ($lead['id'] ?? '')) ?>" />
@@ -244,10 +240,6 @@ $leadFormAnswers = $isAgency ? [] : crm_read_lead_form_answer_rows($lead);
               <label>
                 Valor da proposta
                 <input type="text" name="proposal_value" value="<?= htmlspecialchars(lead_money_input($lead, 'proposal_value')) ?>" inputmode="numeric" autocomplete="off" placeholder="R$ 0,00" data-currency-input />
-              </label>
-              <label>
-                Previsão de fechamento
-                <input type="date" name="expected_close_date" value="<?= htmlspecialchars((string) ($lead['expected_close_date'] ?? '')) ?>" />
               </label>
               <label class="field-wide">
                 Motivo de perda
@@ -264,7 +256,7 @@ $leadFormAnswers = $isAgency ? [] : crm_read_lead_form_answer_rows($lead);
               <input type="hidden" name="id" value="<?= htmlspecialchars((string) ($lead['id'] ?? '')) ?>" />
               <input type="hidden" name="status" value="<?= htmlspecialchars($status) ?>" />
               <label>
-                Tags do contato
+                Etiquetas do contato
                 <input type="text" name="tags" value="<?= htmlspecialchars(implode(', ', $leadTags)) ?>" placeholder="proposta, retorno, indicação" data-tags-input />
                 <span class="tag-preview" data-tags-preview hidden></span>
               </label>
