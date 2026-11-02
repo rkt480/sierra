@@ -759,34 +759,6 @@ function pilot_status_inbound_media_base_url(): string
     return $baseUrl === '' ? '' : $baseUrl . '/inbound-media';
 }
 
-function pilot_status_cleanup_inbound_media(int $maxAge = 2592000): void
-{
-    $directory = pilot_status_inbound_media_directory();
-
-    if (!is_dir($directory)) {
-        return;
-    }
-
-    $cutoff = time() - max(86400, $maxAge);
-    $entries = scandir($directory);
-
-    if ($entries === false) {
-        return;
-    }
-
-    foreach ($entries as $entry) {
-        if ($entry === '.' || $entry === '..' || $entry === '.htaccess' || $entry === '.gitkeep') {
-            continue;
-        }
-
-        $path = $directory . '/' . $entry;
-
-        if (is_file($path) && (int) @filemtime($path) < $cutoff) {
-            @unlink($path);
-        }
-    }
-}
-
 function pilot_status_normalize_media_mime_type(string $mimeType): string
 {
     return strtolower(trim((string) preg_replace('/;.*$/', '', $mimeType)));
@@ -846,8 +818,6 @@ function pilot_status_store_inbound_media_data_uri(string $dataUri, string $mime
     if (!is_dir($directory) && !@mkdir($directory, 0755, true) && !is_dir($directory)) {
         return ['ok' => false, 'error' => 'Não foi possível preparar o armazenamento da mídia recebida.'];
     }
-
-    pilot_status_cleanup_inbound_media();
 
     $matches = [];
 

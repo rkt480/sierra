@@ -258,6 +258,7 @@ $leadFormAnswers = $isAgency ? [] : crm_read_lead_form_answer_rows($lead);
               <label>
                 Etiquetas do contato
                 <input type="text" name="tags" value="<?= htmlspecialchars(implode(', ', $leadTags)) ?>" placeholder="proposta, retorno, indicação" data-tags-input />
+                <small class="tag-entry-help"><strong>Para adicionar novas etiquetas, separe-as por vírgula e clique em Salvar detalhes.</strong></small>
                 <span class="tag-preview" data-tags-preview hidden></span>
               </label>
               <label>

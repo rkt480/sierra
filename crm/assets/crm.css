@@ -917,6 +917,13 @@ dd {
   gap: 8px;
 }
 
+.tag-entry-help {
+  color: #64748b;
+  font-size: 0.76rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
 .lead-modal-tags {
   margin: 8px 0 0;
 }
