@@ -10,6 +10,7 @@ crm/data/settings.json
 crm/data/*.log
 crm/data/*.lock
 crm/data/security-*.json
+crm/data/.settings-encryption.key
 
 # Arquivos do sistema operacional
 .DS_Store
