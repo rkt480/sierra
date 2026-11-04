@@ -221,6 +221,12 @@ function crm_rd_webhook_answers(array $payload, array $flat): array
         }
     }
 
+    foreach ($flat as $key => $value) {
+        if (is_string($key) && preg_match('/\Acf_[a-z0-9_]+\z/i', $key) === 1) {
+            $containers[] = [$key => $value];
+        }
+    }
+
     $content = $payload['leads'][0]['last_conversion']['content'] ?? null;
     if (is_array($content)) {
         $containers[] = $content;
@@ -228,7 +234,12 @@ function crm_rd_webhook_answers(array $payload, array $flat): array
 
     $answers = [];
     $seen = [];
-    $technical = ['uuid', 'id', 'email', 'e_mail', 'phone', 'phone_number', 'personal_phone', 'mobile_phone', 'whatsapp', 'celular', 'nome', 'name', 'company', 'empresa', 'created_at', 'updated_at', 'event_type', 'event_identifier', 'number_conversions', 'conversion_origin', 'custom_fields'];
+    $technical = [
+        'uuid', 'id', 'email', 'e_mail', 'phone', 'phone_number', 'personal_phone', 'mobile_phone',
+        'whatsapp', 'celular', 'nome', 'name', 'company', 'empresa', 'created_at', 'updated_at',
+        'timestamp', 'event_timestamp', 'event_type', 'event_identifier', 'number_conversions',
+        'conversion_origin', 'custom_fields',
+    ];
 
     foreach ($containers as $container) {
         foreach (crm_rd_webhook_field_pairs($container) as $question => $value) {
@@ -347,12 +358,19 @@ $origin = crm_rd_webhook_text(
     ?? ''
 );
 
-if ($eventType !== '' && $eventType !== 'CONVERSION') {
+$acceptedEventTypes = ['CONVERSION', 'WEBHOOK.CONVERTED'];
+if ($eventType !== '' && !in_array($eventType, $acceptedEventTypes, true)) {
+    error_log(sprintf(
+        '[CRM RD Webhook] request_id=%s ignored unsupported event_type=%s',
+        $rdRequestId,
+        substr($eventType, 0, 100)
+    ));
     crm_rd_webhook_response(200, [
         'ok' => true,
         'accepted' => true,
         'created' => false,
         'ignored' => true,
+        'event_type' => $eventType,
         'message' => 'O Sierra processa apenas conversões de entrada do RD Station.',
     ]);
 }
@@ -434,6 +452,7 @@ $contactKey = $contactIdentity !== '' ? hash('sha256', strtolower(trim($contactI
 $conversionAt = crm_rd_webhook_text(
     $legacyLead['last_conversion']['created_at']
     ?? $flat['event_timestamp']
+    ?? $flat['timestamp']
     ?? $flat['created_at']
     ?? ''
 );
