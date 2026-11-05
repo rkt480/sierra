@@ -238,7 +238,8 @@ function crm_rd_webhook_answers(array $payload, array $flat): array
         'uuid', 'id', 'email', 'e_mail', 'phone', 'phone_number', 'personal_phone', 'mobile_phone',
         'whatsapp', 'celular', 'nome', 'name', 'company', 'empresa', 'created_at', 'updated_at',
         'timestamp', 'event_timestamp', 'event_type', 'event_identifier', 'number_conversions',
-        'conversion_origin', 'custom_fields',
+        'conversion_origin', 'custom_fields', 'traffic_source', 'user_agent', 'device', 'asset_id',
+        'cdp_original_event',
     ];
 
     foreach ($containers as $container) {

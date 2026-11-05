@@ -446,6 +446,22 @@ function crm_form_answer_display_text(string $value): string
     return preg_replace('/\s+/', ' ', $text) ?: $text;
 }
 
+function crm_is_rd_webhook_technical_answer(array $lead, string $question): bool
+{
+    $tags = array_map('strtolower', crm_decode_lead_tags($lead));
+    if (!in_array('rd-station', $tags, true)) {
+        return false;
+    }
+
+    return in_array(crm_form_answer_key($question), [
+        'traffic_source',
+        'user_agent',
+        'device',
+        'asset_id',
+        'cdp_original_event',
+    ], true);
+}
+
 function crm_read_lead_form_answer_rows(array $lead): array
 {
     $decoded = crm_decode_lead_form_answers($lead);
@@ -463,6 +479,8 @@ function crm_read_lead_form_answer_rows(array $lead): array
                 $answer === ''
                 || crm_is_contact_form_answer_question($questionId)
                 || crm_is_contact_form_answer_question($question)
+                || crm_is_rd_webhook_technical_answer($lead, $questionId)
+                || crm_is_rd_webhook_technical_answer($lead, $question)
                 || ($dedupeKey !== '' && isset($seen[$dedupeKey]))
             ) {
                 continue;
@@ -488,6 +506,7 @@ function crm_read_lead_form_answer_rows(array $lead): array
             $question === ''
             || $answer === ''
             || crm_is_contact_form_answer_question($question)
+            || crm_is_rd_webhook_technical_answer($lead, $question)
             || ($dedupeKey !== '' && isset($seen[$dedupeKey]))
         ) {
             continue;
