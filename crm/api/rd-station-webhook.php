@@ -8,6 +8,8 @@ require_once dirname(__DIR__) . '/lib/email.php';
 require_once dirname(__DIR__) . '/lib/meta-capi.php';
 require_once dirname(__DIR__) . '/lib/security.php';
 require_once dirname(__DIR__) . '/lib/forms.php';
+require_once dirname(__DIR__) . '/lib/whatsapp.php';
+require_once dirname(__DIR__) . '/lib/whatsapp-templates.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
@@ -54,6 +56,104 @@ function crm_rd_webhook_reply_then_continue(array $body): void
         }
     }
     flush();
+}
+
+function crm_rd_webhook_template_field_value(array $lead, string $field): string
+{
+    $value = match ($field) {
+        'name' => $lead['name'] ?? '',
+        'company' => $lead['company'] ?? '',
+        'segment' => $lead['segment'] ?? '',
+        'message' => $lead['message'] ?? '',
+        'whatsapp' => $lead['whatsapp'] ?? '',
+        'email' => $lead['email'] ?? '',
+        'seller' => $lead['assigned_user_name'] ?? $lead['seller'] ?? '',
+        default => '',
+    };
+
+    return is_scalar($value) ? trim((string) $value) : '';
+}
+
+function crm_rd_webhook_send_whatsapp_template(array $lead, int $templateId, array $mapping): array
+{
+    if ($templateId <= 0) {
+        return ['ok' => true, 'skipped' => true, 'reason' => 'Nenhum template automático selecionado.'];
+    }
+
+    $leadId = trim((string) ($lead['id'] ?? ''));
+    $lead = $leadId !== '' ? (crm_find_lead($leadId, false) ?? $lead) : $lead;
+    $template = crm_find_whatsapp_template($templateId);
+    $provider = crm_whatsapp_provider();
+
+    if (!is_array($template) || !crm_whatsapp_template_is_sendable($template, $provider)) {
+        return ['ok' => false, 'error' => 'O template automático selecionado não está mais ativo e aprovado para o provedor atual.'];
+    }
+
+    $number = crm_normalize_lead_whatsapp((string) ($lead['whatsapp'] ?? ''));
+
+    if ($number === '') {
+        return ['ok' => false, 'error' => 'O lead recebido do RD não tem um WhatsApp válido.'];
+    }
+
+    $variableKeys = crm_whatsapp_template_variable_keys((string) ($template['body_text'] ?? ''));
+    $providerVariables = [];
+    $orderedVariables = [];
+
+    foreach ($variableKeys as $index => $variableKey) {
+        $field = trim((string) ($mapping[$variableKey] ?? ''));
+        $allowedFields = ['name', 'company', 'segment', 'message', 'whatsapp', 'email', 'seller'];
+        if (!in_array($field, $allowedFields, true)) {
+            $field = crm_whatsapp_template_default_variable_field($variableKey, (int) $index);
+        }
+
+        $value = crm_rd_webhook_template_field_value($lead, $field);
+        if ($value === '') {
+            return [
+                'ok' => false,
+                'error' => 'A variável {{' . $variableKey . '}} está mapeada para um campo vazio (' . $field . ').',
+            ];
+        }
+
+        $providerVariables[$variableKey] = $value;
+        $orderedVariables[] = $value;
+    }
+
+    $result = $provider === 'pilot_status'
+        ? pilot_status_send_template($number, $template, $providerVariables)
+        : meta_whatsapp_send_template($number, $template, $orderedVariables);
+
+    if (($result['ok'] ?? false) !== true) {
+        return $result;
+    }
+
+    $providerLabel = crm_whatsapp_provider_label($provider);
+    $renderedBody = crm_whatsapp_template_render((string) ($template['body_text'] ?? ''), $providerVariables, $lead);
+    $note = 'Template "' . (string) ($template['name'] ?? '') . '" enviado via ' . $providerLabel . ' em ' . date('d/m/Y H:i:s') . ":\n" . $renderedBody;
+    $messageId = crm_whatsapp_response_message_id($result);
+    if ($messageId !== '') {
+        $note .= "\nCRM message ID: " . $messageId;
+    }
+
+    crm_append_lead_note($leadId, $note);
+    crm_update_whatsapp_status($leadId, $provider === 'pilot_status' ? 'aguardando' : 'enviado');
+
+    if ((string) ($lead['first_contact_at'] ?? '') === '') {
+        crm_record_lead_timeline_event(
+            $leadId,
+            'first_contact',
+            'Atendimento iniciado',
+            'Primeiro contato enviado automaticamente pelo WhatsApp após conversão do RD Station.'
+        );
+    }
+
+    crm_record_lead_timeline_event(
+        $leadId,
+        'whatsapp_template_sent',
+        'Template enviado automaticamente pelo WhatsApp',
+        'Template ' . trim((string) ($template['name'] ?? '')) . ' enviado após conversão do RD Station via ' . $providerLabel . '.'
+    );
+
+    return $result + ['automatic' => true];
 }
 
 function crm_rd_webhook_text(mixed $value, int $depth = 0): string
@@ -559,5 +659,50 @@ if (($leadResult['created'] ?? false) === true || ($leadResult['reactivated'] ??
         }
     } catch (Throwable $error) {
         error_log('[CRM RD Webhook] request_id=' . $rdRequestId . ' Meta CAPI failed: ' . substr($error->getMessage(), 0, 240));
+    }
+
+    $automaticTemplateId = max(0, (int) ($settings['rd_webhook_whatsapp_template_id'] ?? 0));
+    if ($automaticTemplateId > 0) {
+        try {
+            $templateResult = crm_rd_webhook_send_whatsapp_template(
+                $lead,
+                $automaticTemplateId,
+                is_array($settings['rd_webhook_whatsapp_template_mapping'] ?? null)
+                    ? $settings['rd_webhook_whatsapp_template_mapping']
+                    : []
+            );
+
+            if (($templateResult['ok'] ?? false) !== true) {
+                $templateError = substr((string) ($templateResult['error'] ?? 'Erro desconhecido.'), 0, 500);
+                $leadId = (string) ($lead['id'] ?? '');
+                error_log('[CRM RD Webhook] request_id=' . $rdRequestId . ' WhatsApp template failed: ' . $templateError);
+                crm_append_lead_note($leadId, 'Falha ao enviar template automático pelo WhatsApp após conversão do RD Station: ' . $templateError);
+                crm_update_whatsapp_status($leadId, 'falha', $templateError);
+                crm_record_lead_timeline_event(
+                    $leadId,
+                    'whatsapp_template_failed',
+                    'Falha no template automático do WhatsApp',
+                    'Não foi possível enviar o template selecionado após conversão do RD Station. ' . $templateError,
+                    'Sistema'
+                );
+            }
+        } catch (Throwable $error) {
+            $errorMessage = substr($error->getMessage(), 0, 500);
+            $leadId = (string) ($lead['id'] ?? '');
+            error_log('[CRM RD Webhook] request_id=' . $rdRequestId . ' WhatsApp template failed: ' . $errorMessage);
+            try {
+                crm_append_lead_note($leadId, 'Falha ao enviar template automático pelo WhatsApp após conversão do RD Station: ' . $errorMessage);
+                crm_update_whatsapp_status($leadId, 'falha', $errorMessage);
+                crm_record_lead_timeline_event(
+                    $leadId,
+                    'whatsapp_template_failed',
+                    'Falha no template automático do WhatsApp',
+                    'Não foi possível enviar o template selecionado após conversão do RD Station. ' . $errorMessage,
+                    'Sistema'
+                );
+            } catch (Throwable $recordError) {
+                error_log('[CRM RD Webhook] request_id=' . $rdRequestId . ' WhatsApp failure record failed: ' . substr($recordError->getMessage(), 0, 240));
+            }
+        }
     }
 }

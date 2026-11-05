@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/lib/auth.php';
 require_once __DIR__ . '/lib/settings.php';
+require_once __DIR__ . '/lib/storage.php';
 require_once __DIR__ . '/lib/whatsapp.php';
+require_once __DIR__ . '/lib/whatsapp-templates.php';
 require_once __DIR__ . '/lib/push.php';
 require_once __DIR__ . '/lib/rd-marketing.php';
 
@@ -48,6 +50,26 @@ $rdMarketingConfigured = crm_rd_marketing_is_configured();
 $rdMarketingConnected = crm_rd_marketing_is_connected();
 $rdMarketingSummary = crm_rd_marketing_queue_summary();
 $rdWebhookToken = trim((string) ($settings['rd_webhook_token'] ?? ''));
+$rdWebhookWhatsAppTemplateId = max(0, (int) ($settings['rd_webhook_whatsapp_template_id'] ?? 0));
+$rdWebhookWhatsAppTemplateMapping = is_array($settings['rd_webhook_whatsapp_template_mapping'] ?? null)
+    ? $settings['rd_webhook_whatsapp_template_mapping']
+    : [];
+$rdWebhookWhatsAppTemplates = array_values(array_filter(
+    crm_read_whatsapp_templates(true),
+    static fn(array $template): bool => crm_whatsapp_template_is_sendable($template)
+));
+$rdWebhookWhatsAppTemplateIds = array_map(
+    static fn(array $template): int => (int) ($template['id'] ?? 0),
+    $rdWebhookWhatsAppTemplates
+);
+$rdWebhookWhatsAppTemplateCatalog = array_map(
+    static fn(array $template): array => [
+        'id' => (int) $template['id'],
+        'name' => (string) ($template['name'] ?? ''),
+        'variables' => crm_whatsapp_template_variable_keys((string) ($template['body_text'] ?? '')),
+    ],
+    $rdWebhookWhatsAppTemplates
+);
 $rdWebhookUrl = '';
 $https = crm_request_is_https();
 $host = (string) ($_SERVER['HTTP_HOST'] ?? '');
@@ -218,6 +240,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Ação inválida para o webhook do RD Station.';
         } else {
             $settings['rd_webhook_token'] = bin2hex(random_bytes(32));
+        }
+    }
+
+    if ($settingsSection === 'rd_webhook_whatsapp') {
+        $templateIdValue = $_POST['rd_webhook_whatsapp_template_id'] ?? null;
+        $templateId = is_scalar($templateIdValue) ? max(0, (int) $templateIdValue) : 0;
+
+        if ($templateId === 0) {
+            $settings['rd_webhook_whatsapp_template_id'] = 0;
+            $settings['rd_webhook_whatsapp_template_mapping'] = [];
+        } else {
+            $template = crm_find_whatsapp_template($templateId);
+
+            if (!is_array($template) || !crm_whatsapp_template_is_sendable($template)) {
+                $error = 'Selecione um template ativo e aprovado para o provedor de WhatsApp configurado.';
+            } else {
+                $allowedFields = ['name', 'company', 'segment', 'message', 'whatsapp', 'email', 'seller'];
+                $postedMapping = is_array($_POST['rd_webhook_whatsapp_template_mapping'] ?? null)
+                    ? $_POST['rd_webhook_whatsapp_template_mapping']
+                    : [];
+                $mapping = [];
+                $variables = crm_whatsapp_template_variable_keys((string) ($template['body_text'] ?? ''));
+
+                foreach ($variables as $index => $variable) {
+                    $defaultField = crm_whatsapp_template_default_variable_field((string) $variable, (int) $index);
+                    $postedFieldValue = $postedMapping[$variable] ?? null;
+                    $postedField = is_scalar($postedFieldValue) ? trim((string) $postedFieldValue) : $defaultField;
+                    $mapping[$variable] = in_array($postedField, $allowedFields, true) ? $postedField : $defaultField;
+                }
+
+                $settings['rd_webhook_whatsapp_template_id'] = $templateId;
+                $settings['rd_webhook_whatsapp_template_mapping'] = $mapping;
+            }
         }
     }
 
@@ -766,6 +821,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <?= $rdWebhookToken !== '' ? 'Gerar nova URL e revogar a atual' : 'Gerar URL do webhook' ?>
                   </button>
                 </form>
+
+                <form class="flow-form" method="post" id="rdWebhookWhatsAppForm">
+                  <input type="hidden" name="_csrf_token" value="<?= htmlspecialchars(crm_csrf_token()) ?>" />
+                  <input type="hidden" name="settings_section" value="rd_webhook_whatsapp" />
+                  <label>
+                    Template automático para conversões
+                    <select name="rd_webhook_whatsapp_template_id" id="rdWebhookWhatsAppTemplate">
+                      <option value="0" <?= $rdWebhookWhatsAppTemplateId === 0 ? 'selected' : '' ?>>Desativado</option>
+                      <?php if ($rdWebhookWhatsAppTemplateId > 0 && !in_array($rdWebhookWhatsAppTemplateId, $rdWebhookWhatsAppTemplateIds, true)): ?>
+                        <option value="<?= $rdWebhookWhatsAppTemplateId ?>" selected>Template salvo, mas indisponível ou não aprovado</option>
+                      <?php endif; ?>
+                      <?php foreach ($rdWebhookWhatsAppTemplates as $template): ?>
+                        <option value="<?= (int) $template['id'] ?>" <?= $rdWebhookWhatsAppTemplateId === (int) $template['id'] ? 'selected' : '' ?>>
+                          <?= htmlspecialchars((string) $template['name']) ?>
+                        </option>
+                      <?php endforeach; ?>
+                    </select>
+                  </label>
+                  <div id="rdWebhookWhatsAppTemplateVariables" class="followup-template-variables"></div>
+                  <p class="settings-help">Ao receber um cadastro novo ou uma nova conversão do RD, o CRM envia este template ao WhatsApp do lead. Reentregas do mesmo evento não duplicam o envio. Configure os campos das variáveis; se deixar desativado, nenhum template será enviado.</p>
+                  <?php if ($rdWebhookWhatsAppTemplates === []): ?>
+                    <p class="settings-help">Nenhum template ativo e aprovado para o provedor atual. <a href="whatsapp-templates.php">Gerenciar templates</a>.</p>
+                  <?php endif; ?>
+                  <button class="integration-save" type="submit">
+                    <span aria-hidden="true">✓</span>
+                    Salvar automação do WhatsApp
+                  </button>
+                </form>
               </section>
 
               <section class="automation-card integration-card">
@@ -859,6 +942,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </main>
       </div>
     </div>
+    <script>
+      (() => {
+        const templateSelect = document.querySelector('#rdWebhookWhatsAppTemplate');
+        const variablesContainer = document.querySelector('#rdWebhookWhatsAppTemplateVariables');
+        const catalog = <?= json_encode($rdWebhookWhatsAppTemplateCatalog, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        const savedMapping = <?= json_encode($rdWebhookWhatsAppTemplateMapping, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        const savedTemplateId = <?= json_encode($rdWebhookWhatsAppTemplateId) ?>;
+        const fields = [
+          ['name', 'Nome do lead'],
+          ['company', 'Empresa'],
+          ['segment', 'Segmento'],
+          ['message', 'Mensagem recebida'],
+          ['whatsapp', 'WhatsApp'],
+          ['email', 'E-mail'],
+          ['seller', 'Vendedor responsável'],
+        ];
+
+        if (!templateSelect || !variablesContainer) return;
+
+        function defaultField(variable, index) {
+          const aliases = {
+            name: 'name', nome: 'name',
+            company: 'company', empresa: 'company',
+            segment: 'segment', segmento: 'segment',
+            message: 'message', mensagem: 'message',
+            whatsapp: 'whatsapp', phone: 'whatsapp', telefone: 'whatsapp',
+            email: 'email',
+            seller: 'seller', vendedor: 'seller', atendente: 'seller',
+          };
+          return aliases[String(variable).toLowerCase()] || ['name', 'company', 'segment', 'message'][index] || 'name';
+        }
+
+        function renderVariables() {
+          variablesContainer.replaceChildren();
+          const selected = catalog.find((item) => String(item.id) === templateSelect.value);
+          const variables = Array.isArray(selected?.variables) ? selected.variables : [];
+
+          if (variables.length === 0) return;
+
+          const title = document.createElement('strong');
+          title.textContent = 'Mapeamento das variáveis';
+          variablesContainer.appendChild(title);
+
+          variables.forEach((variable, index) => {
+            const label = document.createElement('label');
+            label.textContent = `{{${variable}}}`;
+            const select = document.createElement('select');
+            select.name = `rd_webhook_whatsapp_template_mapping[${variable}]`;
+            fields.forEach(([value, text]) => select.appendChild(new Option(text, value)));
+            const savedField = Number(templateSelect.value) === savedTemplateId ? savedMapping[variable] : '';
+            select.value = savedField || defaultField(variable, index);
+            label.appendChild(select);
+            variablesContainer.appendChild(label);
+          });
+        }
+
+        templateSelect.addEventListener('change', renderVariables);
+        renderVariables();
+      })();
+    </script>
     <script src="./assets/crm-navigation.js?v=20260812-fast-navigation-v3"></script>
   </body>
 </html>

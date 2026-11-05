@@ -13,6 +13,8 @@
     "whatsapp_after_hours_message": "Olá! Nosso atendimento funciona em horário comercial. Recebemos sua mensagem e retornaremos assim que possível.",
     "pilot_status_base_url": "https://pilotstatus.com.br/v1",
     "pilot_status_webhook_secret": "",
+    "rd_webhook_whatsapp_template_id": 0,
+    "rd_webhook_whatsapp_template_mapping": {},
     "meta_whatsapp_access_token": "",
     "pilot_status_api_key": ""
 }

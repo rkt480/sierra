@@ -32,6 +32,23 @@ function crm_whatsapp_template_variable_keys(string $text): array
     return $variables;
 }
 
+function crm_whatsapp_template_default_variable_field(string $variable, int $index): string
+{
+    $namedFields = [
+        'name' => 'name', 'nome' => 'name',
+        'company' => 'company', 'empresa' => 'company',
+        'segment' => 'segment', 'segmento' => 'segment',
+        'message' => 'message', 'mensagem' => 'message',
+        'whatsapp' => 'whatsapp', 'phone' => 'whatsapp', 'telefone' => 'whatsapp',
+        'email' => 'email',
+        'seller' => 'seller', 'vendedor' => 'seller', 'atendente' => 'seller',
+    ];
+    $normalizedVariable = strtolower(trim($variable));
+    $defaultFields = ['name', 'company', 'segment', 'message'];
+
+    return $namedFields[$normalizedVariable] ?? ($defaultFields[$index] ?? 'name');
+}
+
 function crm_whatsapp_template_render(string $text, array $values, array $lead = []): string
 {
     return preg_replace_callback('/\{\{\s*([a-zA-Z][a-zA-Z0-9_]*|\d+)\s*\}\}/u', static function (array $match) use ($values, $lead): string {
