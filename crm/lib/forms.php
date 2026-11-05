@@ -448,13 +448,22 @@ function crm_form_answer_display_text(string $value): string
 
 function crm_is_technical_form_answer(string $question): bool
 {
-    return in_array(crm_form_answer_key($question), [
+    $technicalKeys = [
         'traffic_source',
         'user_agent',
         'device',
         'asset_id',
         'cdp_original_event',
-    ], true);
+    ];
+    $normalizedQuestion = crm_form_answer_key($question);
+    $compactQuestion = preg_replace('/[^a-z0-9]+/', '', strtolower($question)) ?: '';
+    $compactTechnicalKeys = array_map(
+        static fn(string $key): string => str_replace('_', '', $key),
+        $technicalKeys
+    );
+
+    return in_array($normalizedQuestion, $technicalKeys, true)
+        || in_array($compactQuestion, $compactTechnicalKeys, true);
 }
 
 function crm_read_lead_form_answer_rows(array $lead): array

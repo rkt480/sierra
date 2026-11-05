@@ -241,15 +241,21 @@ function crm_rd_webhook_answers(array $payload, array $flat): array
         'conversion_origin', 'custom_fields', 'traffic_source', 'user_agent', 'device', 'asset_id',
         'cdp_original_event',
     ];
+    $technicalCompact = array_map(
+        static fn(string $key): string => str_replace('_', '', $key),
+        $technical
+    );
 
     foreach ($containers as $container) {
         foreach (crm_rd_webhook_field_pairs($container) as $question => $value) {
             $normalizedQuestion = crm_rd_webhook_normalize_key((string) $question);
+            $compactQuestion = str_replace('_', '', $normalizedQuestion);
             $answer = crm_rd_webhook_text($value);
             if (
                 $normalizedQuestion === ''
                 || $answer === ''
                 || in_array($normalizedQuestion, $technical, true)
+                || in_array($compactQuestion, $technicalCompact, true)
                 || str_starts_with($normalizedQuestion, 'utm_')
                 || str_starts_with($normalizedQuestion, 'conversion_')
                 || crm_is_contact_form_answer_question((string) $question)
