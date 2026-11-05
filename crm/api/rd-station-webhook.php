@@ -239,7 +239,7 @@ function crm_rd_webhook_answers(array $payload, array $flat): array
         'whatsapp', 'celular', 'nome', 'name', 'company', 'empresa', 'created_at', 'updated_at',
         'timestamp', 'event_timestamp', 'event_type', 'event_identifier', 'number_conversions',
         'conversion_origin', 'custom_fields', 'traffic_source', 'user_agent', 'device', 'asset_id',
-        'cdp_original_event',
+        'cdp_original_event', 'identifier', 'identificador',
     ];
     $technicalCompact = array_map(
         static fn(string $key): string => str_replace('_', '', $key),

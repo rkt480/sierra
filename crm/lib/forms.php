@@ -454,6 +454,8 @@ function crm_is_technical_form_answer(string $question): bool
         'device',
         'asset_id',
         'cdp_original_event',
+        'identifier',
+        'identificador',
     ];
     $normalizedQuestion = crm_form_answer_key($question);
     $compactQuestion = preg_replace('/[^a-z0-9]+/', '', strtolower($question)) ?: '';
