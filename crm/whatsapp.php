@@ -106,7 +106,7 @@ function whatsapp_page_parse_br_datetime(string $value): string
     $date = DateTime::createFromFormat('d/m/Y H:i:s', $value);
     $date = $date instanceof DateTime ? $date : DateTime::createFromFormat('d/m/Y H:i', $value);
 
-    return $date instanceof DateTime ? $date->format('Y-m-d H:i:s') : date('Y-m-d H:i:s');
+    return $date instanceof DateTime ? $date->format('Y-m-d H:i:s') : '';
 }
 
 function whatsapp_page_time_label(string $date): string
@@ -242,6 +242,7 @@ function whatsapp_page_clean_sent_message_text(string $text): string
     $text = preg_replace('/\R?Status: aceito pela API\.\R?/iu', "\n", $text) ?? $text;
     $text = preg_replace('/\R?Pilot Status ID:\s*[^\r\n]+/iu', '', $text) ?? $text;
     $text = preg_replace('/\R?CRM message ID:\s*[^\r\n]+/iu', '', $text) ?? $text;
+    $text = preg_replace('/\R?CRM message IDs:\s*[^\r\n]+/iu', '', $text) ?? $text;
     $text = preg_replace('/\R?CRM gatilho de horário:\s*[^\r\n]+/iu', '', $text) ?? $text;
 
     return trim($text);
@@ -314,17 +315,22 @@ function whatsapp_page_message_id_from_text(string $text): string
 function whatsapp_page_delivery_label(array $lead, string $messageId, string $block = ''): string
 {
     $notes = (string) ($lead['notes'] ?? '');
-    $messageId = trim($messageId);
+    $messageIds = crm_whatsapp_unique_message_identifiers([
+        $messageId,
+        ...crm_whatsapp_note_message_identifiers($block),
+    ]);
 
-    if ($messageId !== '') {
+    if ($messageIds !== []) {
         foreach ([
             'message.failed' => 'Falhou',
             'message.read' => 'Lida',
             'message.delivered' => 'Entregue',
             'message.sent' => 'Enviada',
         ] as $event => $label) {
-            if (str_contains($notes, 'Pilot Status evento: ' . $event . ' | ID: ' . $messageId)) {
-                return $label;
+            foreach ($messageIds as $candidateId) {
+                if (str_contains($notes, 'Pilot Status evento: ' . $event . ' | ID: ' . $candidateId)) {
+                    return $label;
+                }
             }
         }
     }
@@ -359,25 +365,6 @@ function whatsapp_page_normalize_media_type(string $type): string
     };
 }
 
-function whatsapp_page_message_id_variants(string $messageId): array
-{
-    $messageId = strtolower(trim($messageId));
-
-    if ($messageId === '') {
-        return [];
-    }
-
-    $variants = [$messageId];
-
-    if (str_starts_with($messageId, 'wamid.')) {
-        $variants[] = substr($messageId, 6);
-    } else {
-        $variants[] = 'wamid.' . $messageId;
-    }
-
-    return array_values(array_unique(array_filter($variants, static fn(string $value): bool => $value !== '')));
-}
-
 function whatsapp_page_extract_reply_context_from_text(string &$text): array
 {
     if (preg_match('/(?:^|\R)\[crm_reply\]([^\r\n]+)\s*$/u', $text, $match) !== 1) {
@@ -406,24 +393,7 @@ function whatsapp_page_extract_reply_context_from_text(string &$text): array
 
 function whatsapp_page_message_id_candidates(array $message): array
 {
-    $ids = [];
-    $media = is_array($message['media'] ?? null) ? $message['media'] : [];
-
-    foreach ([
-        $message['message_id'] ?? '',
-        $message['crm_message_id'] ?? '',
-        $media['crm_message_id'] ?? '',
-        $media['message_id'] ?? '',
-        $media['id'] ?? '',
-    ] as $candidate) {
-        $candidate = trim((string) $candidate);
-
-        if ($candidate !== '' && !in_array($candidate, $ids, true)) {
-            $ids[] = $candidate;
-        }
-    }
-
-    return $ids;
+    return crm_whatsapp_message_identifiers_from_message($message);
 }
 
 function whatsapp_page_message_dom_id(array $message): string
@@ -434,7 +404,7 @@ function whatsapp_page_message_dom_id(array $message): string
         return '';
     }
 
-    return 'wa-message-' . substr(hash('sha256', strtolower($ids[0])), 0, 20);
+    return 'wa-message-' . substr(hash('sha256', $ids[0]), 0, 20);
 }
 
 function whatsapp_page_reply_context_label(array $message): string
@@ -479,17 +449,7 @@ function whatsapp_page_reply_context_preview(array $message): string
 
 function whatsapp_page_attach_reply_contexts(array &$messages): void
 {
-    $messagesById = [];
-
-    foreach ($messages as $message) {
-        foreach (whatsapp_page_message_id_candidates($message) as $messageId) {
-            foreach (whatsapp_page_message_id_variants($messageId) as $messageIdVariant) {
-                $messagesById[$messageIdVariant] = $message;
-            }
-        }
-    }
-
-    foreach ($messages as $messageIndex => &$message) {
+    foreach ($messages as &$message) {
         $replyContext = is_array($message['reply_context'] ?? null) ? $message['reply_context'] : [];
         $messageMedia = is_array($message['media'] ?? null) ? $message['media'] : [];
 
@@ -501,78 +461,19 @@ function whatsapp_page_attach_reply_contexts(array &$messages): void
             continue;
         }
 
-        $quoted = null;
         $replyId = trim((string) ($replyContext['id'] ?? ''));
-
-        foreach (whatsapp_page_message_id_variants($replyId) as $replyIdVariant) {
-            if (isset($messagesById[$replyIdVariant])) {
-                $quoted = $messagesById[$replyIdVariant];
-                break;
-            }
-        }
+        $quoted = crm_whatsapp_find_unique_message_by_id($messages, $replyId);
 
         if (!is_array($quoted)) {
-            $replyType = whatsapp_page_normalize_media_type((string) ($replyContext['type'] ?? ''));
-            $replyText = strtolower(trim((string) ($replyContext['text'] ?? '')));
-            $nearestOutgoing = null;
-
-            for ($candidateIndex = $messageIndex - 1; $candidateIndex >= 0; $candidateIndex--) {
-                $candidate = $messages[$candidateIndex] ?? [];
-
-                if (!is_array($candidate) || ($candidate['direction'] ?? '') !== 'outgoing') {
-                    continue;
-                }
-
-                if (!is_array($nearestOutgoing)) {
-                    $nearestOutgoing = $candidate;
-                }
-
-                $candidateMedia = is_array($candidate['media'] ?? null) ? $candidate['media'] : [];
-                $candidateType = whatsapp_page_normalize_media_type((string) ($candidateMedia['type'] ?? ''));
-                $candidateText = strtolower(trim((string) ($candidate['text'] ?? '')));
-                $textMatches = $replyText !== '' && $candidateText !== ''
-                    && ($candidateText === $replyText
-                        || str_contains($candidateText, $replyText)
-                        || str_contains($replyText, $candidateText));
-                $typeMatches = $replyType !== '' && $candidateType === $replyType;
-
-                if ($candidateType === '' && $candidateText !== '') {
-                    $candidateType = whatsapp_page_infer_media_type_from_text($candidateText);
-                    $typeMatches = $replyType !== '' && $candidateType === $replyType;
-                }
-
-                if ($textMatches || $typeMatches) {
-                    $quoted = $candidate;
-                    break;
-                }
-
-            }
-
-            // Some provider payloads expose a quoted ID that differs from the
-            // ID saved in the CRM. The nearest outgoing message is the best
-            // available match when the provider omits the quoted snapshot.
-            if (!is_array($quoted) && is_array($nearestOutgoing)) {
-                $quoted = $nearestOutgoing;
-            }
-        }
-
-        if (!is_array($quoted)) {
-            $fallbackMediaType = whatsapp_page_normalize_media_type((string) ($replyContext['type'] ?? ''));
-            $fallbackMedia = [];
-
-            if ($fallbackMediaType !== '') {
-                $fallbackMedia = [
-                    'type' => $fallbackMediaType,
-                    'url' => trim((string) ($replyContext['url'] ?? '')),
-                ];
-            }
-
-            $quoted = [
-                'direction' => 'outgoing',
-                'text' => trim((string) ($replyContext['text'] ?? '')),
-                'media' => $fallbackMedia,
-                'label' => 'Enviada',
+            // Keep an unresolved citation visible, but never borrow a nearby
+            // message or provider snapshot that could point to the wrong media.
+            $message['reply_to'] = [
+                'author' => 'Você',
+                'text' => '',
+                'media' => [],
+                'preview' => 'Mensagem citada',
             ];
+            continue;
         }
 
         $message['reply_to'] = [
@@ -661,7 +562,7 @@ function whatsapp_page_message_provider(string $providerLabel, string $fallback 
 function whatsapp_page_is_technical_delivery_note(string $text): bool
 {
     return preg_match(
-        '/^(?:Pilot Status evento:|wamid\.|WhatsApp confirmou (?:o envio|a entrega|a leitura)|Status inicial:|Pilot Status ID:)/iu',
+        '/^(?:Pilot Status evento:|Pilot Status IDs pendentes:|wamid\.|WhatsApp confirmou (?:o envio|a entrega|a leitura)|Status inicial:|Pilot Status ID:)/iu',
         trim($text)
     ) === 1;
 }
@@ -675,65 +576,12 @@ function whatsapp_page_is_technical_delivery_note(string $text): bool
  */
 function whatsapp_page_note_blocks(string $notes): array
 {
-    $recordStart = '(?:Resposta automática fora do horário enviada via|Observação do CRM em|Mensagem recebida pelo provedor anterior|Mensagem recebida pela Meta Cloud API|Mensagem recebida pela Pilot Status|Mídia recebida pela Pilot Status|Mídia enviada (?:via|pelo)|Mensagem enviada (?:via|pelo)|Template .+ enviado via|Falha ao enviar via|Pilot Status evento:)';
-    $blocks = [];
-
-    // A resposta fora do horário pode conter parágrafos separados por linhas
-    // em branco. Só considere uma linha em branco como separador quando o
-    // próximo bloco começar com um marcador conhecido do CRM.
-    $groups = preg_split('/(?:\R){2,}(?=^' . $recordStart . ')/mu', trim($notes)) ?: [];
-
-    foreach ($groups as $group) {
-        $group = trim($group);
-
-        if (preg_match('/^Resposta automática fora do horário enviada via /iu', $group) === 1) {
-            if ($group !== '') {
-                $blocks[] = $group;
-            }
-
-            continue;
-        }
-
-        foreach (preg_split('/(?:\R){2,}/u', $group) ?: [] as $legacyGroup) {
-            $legacyGroup = trim($legacyGroup);
-
-            if ($legacyGroup === '') {
-                continue;
-            }
-
-            foreach (preg_split('/(?=^' . $recordStart . ')/mu', $legacyGroup) ?: [] as $block) {
-                $block = trim($block);
-
-                if ($block !== '') {
-                    $blocks[] = $block;
-                }
-            }
-        }
-    }
-
-    return $blocks;
+    return crm_whatsapp_link_note_blocks($notes);
 }
 
 function whatsapp_page_compare_messages(array $a, array $b): int
 {
-    $sameLead = (string) ($a['_lead_id'] ?? '') !== ''
-        && (string) ($a['_lead_id'] ?? '') === (string) ($b['_lead_id'] ?? '');
-
-    // Older CRM observations did not carry their own timestamp. Their place
-    // in the notes field is the reliable order, otherwise a new incoming
-    // message makes every old observation look like the newest item.
-    if ($sameLead && (($a['_legacy_ordered'] ?? false) || ($b['_legacy_ordered'] ?? false))) {
-        return ((int) ($a['_sequence'] ?? 0)) <=> ((int) ($b['_sequence'] ?? 0));
-    }
-
-    $timestampComparison = whatsapp_page_timestamp((string) ($a['at'] ?? ''))
-        <=> whatsapp_page_timestamp((string) ($b['at'] ?? ''));
-
-    if ($timestampComparison !== 0) {
-        return $timestampComparison;
-    }
-
-    return ((int) ($a['_sequence'] ?? 0)) <=> ((int) ($b['_sequence'] ?? 0));
+    return crm_whatsapp_compare_conversation_messages($a, $b);
 }
 
 function whatsapp_template_status_label_for_conversation(array $template): string
@@ -754,9 +602,7 @@ function whatsapp_template_status_label_for_conversation(array $template): strin
 
 function whatsapp_page_timestamp(string $date): int
 {
-    $timestamp = strtotime($date);
-
-    return $timestamp === false ? 0 : $timestamp;
+    return crm_whatsapp_timestamp($date);
 }
 
 function whatsapp_page_latest_lead_date(array $lead): string
@@ -963,6 +809,7 @@ function whatsapp_page_messages_for_lead(array $lead): array
                         'message_id' => $blockMessageId !== ''
                             ? $blockMessageId
                             : trim((string) ($media['crm_message_id'] ?? ($media['message_id'] ?? ''))),
+                        'message_ids' => crm_whatsapp_note_message_identifiers($block),
                     ];
                     continue;
                 }
@@ -978,6 +825,7 @@ function whatsapp_page_messages_for_lead(array $lead): array
                     'text' => $sentText,
                     'label' => whatsapp_page_delivery_label($lead, $blockMessageId, $block),
                     'message_id' => $blockMessageId,
+                    'message_ids' => crm_whatsapp_note_message_identifiers($block),
                 ];
 
                 $sentMediaType = whatsapp_page_infer_media_type_from_text($sentText);
@@ -1000,6 +848,7 @@ function whatsapp_page_messages_for_lead(array $lead): array
                     'text' => $sentText,
                     'label' => 'Enviada',
                     'message_id' => $blockMessageId,
+                    'message_ids' => crm_whatsapp_note_message_identifiers($block),
                 ];
                 continue;
             }
@@ -1025,6 +874,7 @@ function whatsapp_page_messages_for_lead(array $lead): array
                     'text' => $templateText,
                     'label' => 'Enviada',
                     'message_id' => $blockMessageId,
+                    'message_ids' => crm_whatsapp_note_message_identifiers($block),
                 ];
                 continue;
             }
@@ -1035,7 +885,8 @@ function whatsapp_page_messages_for_lead(array $lead): array
             // conversation and the bubble gets the outgoing styling.
             if (preg_match('/CRM message ID:\s*[^\r\n]+/iu', $block) === 1) {
                 $legacyText = $block;
-                $legacyAt = (string) ($lead['updated_at'] ?? $lead['created_at'] ?? date('Y-m-d H:i:s'));
+                $legacyAt = (string) ($lead['created_at'] ?? '');
+                $legacyOrdered = true;
 
                 if (preg_match('/^Observação do CRM em ([0-9]{2}\/\d{2}\/\d{4} [0-9]{2}:[0-9]{2}(?::[0-9]{2})?):\R(.+)$/su', $block, $legacyMatch) === 1) {
                     $legacyAt = whatsapp_page_parse_br_datetime((string) $legacyMatch[1]);
@@ -1052,6 +903,8 @@ function whatsapp_page_messages_for_lead(array $lead): array
                         'text' => $legacyText,
                         'label' => 'Enviada',
                         'message_id' => $blockMessageId,
+                        'message_ids' => crm_whatsapp_note_message_identifiers($block),
+                        '_legacy_ordered' => $legacyOrdered,
                     ];
                     continue;
                 }
@@ -1096,7 +949,7 @@ function whatsapp_page_messages_for_lead(array $lead): array
             $messages[] = [
                 'direction' => 'note',
                 'provider' => $provider,
-                'at' => (string) ($lead['updated_at'] ?? $lead['created_at'] ?? date('Y-m-d H:i:s')),
+                'at' => '',
                 'text' => $block,
                 'label' => 'Observação do CRM',
                 '_legacy_ordered' => true,
@@ -1319,12 +1172,15 @@ foreach ($conversationGroups as $whatsapp => $conversation) {
     foreach ($conversation['messages'] ?? [] as $message) {
         $messageTimestamp = whatsapp_page_timestamp((string) ($message['at'] ?? ''));
         $media = is_array($message['media'] ?? null) ? $message['media'] : [];
+        $messageIds = whatsapp_page_message_id_candidates($message);
         $messageKey = implode('|', [
             (string) ($message['direction'] ?? ''),
             (string) ($message['provider'] ?? ''),
             $messageTimestamp > 0 ? date('Y-m-d H:i', $messageTimestamp) : '',
             trim((string) ($message['text'] ?? '')),
             trim((string) ($media['crm_message_id'] ?? ($media['id'] ?? ($media['url'] ?? '')))),
+            (string) ($message['_lead_id'] ?? ''),
+            $messageIds !== [] ? 'sequence:' . (string) ($message['_sequence'] ?? '') : '',
         ]);
         $uniqueConversationMessages[$messageKey] = $message;
     }

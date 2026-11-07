@@ -6,6 +6,7 @@ require_once __DIR__ . '/meta-whatsapp.php';
 require_once __DIR__ . '/pilot-status.php';
 require_once __DIR__ . '/settings.php';
 require_once __DIR__ . '/whatsapp-templates.php';
+require_once __DIR__ . '/whatsapp-message-links.php';
 
 function crm_whatsapp_provider_label(?string $provider = null): string
 {
@@ -63,7 +64,7 @@ function crm_whatsapp_response_message_id(array $result): string
         }
     }
 
-    return '';
+    return crm_whatsapp_response_message_ids($result)[0] ?? '';
 }
 
 function crm_whatsapp_after_hours_settings(): array

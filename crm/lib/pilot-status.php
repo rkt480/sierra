@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/storage.php';
 require_once __DIR__ . '/settings.php';
 require_once __DIR__ . '/security.php';
+require_once __DIR__ . '/whatsapp-message-links.php';
 
 function pilot_status_settings(): array
 {
@@ -554,110 +555,166 @@ function pilot_status_send_template(string $number, array $template, array $vari
     ], 60);
 }
 
-function pilot_status_extract_delivery_event(array $payload): array
+function pilot_status_delivery_event_name(string $value): string
 {
-    $event = strtolower(trim((string) pilot_status_first_payload_value($payload, [
+    $value = strtolower(trim($value));
+
+    if (in_array($value, ['message.sent', 'message.delivered', 'message.read', 'message.failed'], true)) {
+        return $value;
+    }
+
+    return match ($value) {
+        'sent' => 'message.sent',
+        'delivered' => 'message.delivered',
+        'read' => 'message.read',
+        'failed' => 'message.failed',
+        default => '',
+    };
+}
+
+function pilot_status_delivery_error(array $payload): string
+{
+    $errorParts = [];
+
+    foreach (['errorMessage', 'error', 'errorCode', 'reason'] as $key) {
+        if (is_scalar($payload[$key] ?? null) && trim((string) $payload[$key]) !== '') {
+            $errorParts[] = trim((string) $payload[$key]);
+        }
+    }
+
+    $errorDetails = is_array($payload['error'] ?? null) ? $payload['error'] : [];
+
+    foreach (['message', 'title', 'details'] as $key) {
+        if (is_scalar($errorDetails[$key] ?? null) && trim((string) $errorDetails[$key]) !== '') {
+            $errorParts[] = trim((string) $errorDetails[$key]);
+        }
+    }
+
+    foreach (is_array($payload['errors'] ?? null) ? $payload['errors'] : [] as $error) {
+        if (!is_array($error)) {
+            continue;
+        }
+
+        foreach (['code', 'title', 'message'] as $key) {
+            if (is_scalar($error[$key] ?? null) && trim((string) $error[$key]) !== '') {
+                $errorParts[] = trim((string) $error[$key]);
+            }
+        }
+
+        $details = $error['error_data']['details'] ?? null;
+
+        if (is_scalar($details) && trim((string) $details) !== '') {
+            $errorParts[] = trim((string) $details);
+        }
+    }
+
+    return implode(' | ', array_values(array_unique($errorParts)));
+}
+
+/**
+ * Pilot Status can send one delivery event or a native Meta envelope with
+ * several `statuses[]` entries. Preserve every exact message identifier.
+ *
+ * @return list<array{event:string,id:string,ids:list<string>,destination:string,error:string,timestamp:string}>
+ */
+function pilot_status_extract_delivery_events(array $payload): array
+{
+    $events = [];
+    $eventName = pilot_status_delivery_event_name((string) pilot_status_first_payload_value($payload, [
         ['event'], ['eventType'], ['type'], ['data', 'event'], ['data', 'eventType'], ['data', 'type'],
-    ])));
-    $deliveryEvents = ['message.sent', 'message.delivered', 'message.read', 'message.failed'];
+    ]));
 
-    if (in_array($event, $deliveryEvents, true)) {
+    if ($eventName !== '') {
         $data = is_array($payload['data'] ?? null) ? $payload['data'] : $payload;
-        $messageId = '';
+        $ids = crm_whatsapp_collect_message_identifiers($data);
 
-        foreach (['id', 'internalMessageId', 'message_id', 'messageId'] as $key) {
-            if (is_scalar($data[$key] ?? null) && trim((string) $data[$key]) !== '') {
-                $messageId = trim((string) $data[$key]);
-                break;
-            }
+        if ($ids === [] && $data !== $payload) {
+            $ids = crm_whatsapp_collect_message_identifiers($payload);
         }
 
-        if ($messageId === '') {
-            $messageId = trim((string) pilot_status_first_payload_value($data, [
-                ['message', 'id'], ['message', 'messageId'], ['key', 'id'],
-            ]));
-        }
-
-        if ($messageId === '' && is_scalar($payload['id'] ?? null)) {
-            $messageId = trim((string) $payload['id']);
-        }
-
-        $errorParts = [];
-
-        foreach (['errorMessage', 'error', 'errorCode', 'reason'] as $key) {
-            if (is_scalar($data[$key] ?? null) && trim((string) $data[$key]) !== '') {
-                $errorParts[] = trim((string) $data[$key]);
-            }
-        }
-
-        $errorDetails = is_array($data['error'] ?? null) ? $data['error'] : [];
-
-        foreach (['message', 'title', 'details'] as $key) {
-            if (is_scalar($errorDetails[$key] ?? null) && trim((string) $errorDetails[$key]) !== '') {
-                $errorParts[] = trim((string) $errorDetails[$key]);
-            }
-        }
-
-        $destination = trim((string) pilot_status_first_payload_value($data, [
-            ['destinationNumber'], ['destination_number'], ['recipient_id'], ['recipient'], ['to'], ['phoneNumber'], ['phone_number'],
-        ]));
-
-        return [
-            'event' => $event,
-            'id' => $messageId,
-            'destination' => $destination,
-            'error' => implode(' | ', array_values(array_unique($errorParts))),
+        $events[] = [
+            'event' => $eventName,
+            'id' => $ids[0] ?? '',
+            'ids' => $ids,
+            'destination' => trim((string) pilot_status_first_payload_value($data, [
+                ['destinationNumber'], ['destination_number'], ['recipient_id'], ['recipientId'], ['recipient'], ['to'], ['phoneNumber'], ['phone_number'],
+            ])),
+            'error' => pilot_status_delivery_error($data),
+            'timestamp' => trim((string) pilot_status_first_payload_value($data, [['timestamp'], ['messageTimestamp'], ['message_timestamp']])),
         ];
     }
 
-    // Pilot Status forwards official Meta delivery notifications in the native
-    // WhatsApp webhook envelope, where the state lives in entry[].changes[].
-    // value.statuses[] rather than in a top-level `event` field.
-    foreach ($payload['entry'] ?? [] as $entry) {
-        foreach (is_array($entry['changes'] ?? null) ? $entry['changes'] : [] as $change) {
-            $value = is_array($change['value'] ?? null) ? $change['value'] : [];
+    $visitStatuses = static function (mixed $value, mixed $parent = null, int $depth = 0) use (&$visitStatuses, &$events): void {
+        if ($depth > 12 || !is_array($value)) {
+            return;
+        }
 
-            foreach (is_array($value['statuses'] ?? null) ? $value['statuses'] : [] as $status) {
-                $statusName = strtolower(trim((string) ($status['status'] ?? '')));
-                $mappedEvent = match ($statusName) {
-                    'sent' => 'message.sent',
-                    'delivered' => 'message.delivered',
-                    'read' => 'message.read',
-                    'failed' => 'message.failed',
-                    default => '',
-                };
-
-                if ($mappedEvent === '') {
-                    continue;
-                }
-
-                $errorParts = [];
-
-                foreach (is_array($status['errors'] ?? null) ? $status['errors'] : [] as $error) {
-                    foreach (['code', 'title', 'message'] as $key) {
-                        if (is_scalar($error[$key] ?? null) && trim((string) $error[$key]) !== '') {
-                            $errorParts[] = trim((string) $error[$key]);
-                        }
+        foreach ($value as $key => $child) {
+            if (strtolower((string) $key) === 'statuses' && is_array($child)) {
+                foreach ($child as $status) {
+                    if (!is_array($status)) {
+                        continue;
                     }
 
-                    $details = $error['error_data']['details'] ?? null;
+                    $mappedEvent = pilot_status_delivery_event_name((string) ($status['status'] ?? ''));
 
-                    if (is_scalar($details) && trim((string) $details) !== '') {
-                        $errorParts[] = trim((string) $details);
+                    if ($mappedEvent === '') {
+                        continue;
                     }
-                }
 
-                return [
-                    'event' => $mappedEvent,
-                    'id' => trim((string) ($status['id'] ?? '')),
-                    'destination' => trim((string) ($status['recipient_id'] ?? '')),
-                    'error' => implode(' | ', array_values(array_unique($errorParts))),
-                ];
+                    $ids = crm_whatsapp_collect_message_identifiers($status);
+                    $parentData = is_array($parent) ? $parent : [];
+                    $destination = trim((string) pilot_status_first_payload_value($status, [
+                        ['recipient_id'], ['recipientId'], ['destinationNumber'], ['destination_number'], ['to'],
+                    ]));
+
+                    if ($destination === '') {
+                        $destination = trim((string) pilot_status_first_payload_value($parentData, [
+                            ['recipient_id'], ['recipientId'], ['destinationNumber'], ['destination_number'], ['to'],
+                        ]));
+                    }
+
+                    $events[] = [
+                        'event' => $mappedEvent,
+                        'id' => $ids[0] ?? '',
+                        'ids' => $ids,
+                        'destination' => $destination,
+                        'error' => pilot_status_delivery_error($status),
+                        'timestamp' => trim((string) ($status['timestamp'] ?? '')),
+                    ];
+                }
             }
+
+            if (is_array($child)) {
+                $visitStatuses($child, $value, $depth + 1);
+            }
+        }
+    };
+
+    $visitStatuses($payload);
+
+    $uniqueEvents = [];
+
+    foreach ($events as $event) {
+        $eventKey = implode('|', [
+            $event['event'],
+            implode(',', $event['ids']),
+            $event['destination'],
+            $event['timestamp'],
+        ]);
+
+        if (!isset($uniqueEvents[$eventKey])) {
+            $uniqueEvents[$eventKey] = $event;
         }
     }
 
-    return ['event' => '', 'id' => '', 'destination' => '', 'error' => ''];
+    return array_values($uniqueEvents);
+}
+
+function pilot_status_extract_delivery_event(array $payload): array
+{
+    return pilot_status_extract_delivery_events($payload)[0]
+        ?? ['event' => '', 'id' => '', 'ids' => [], 'destination' => '', 'error' => '', 'timestamp' => ''];
 }
 
 function pilot_status_send_text(string $number, string $text): array

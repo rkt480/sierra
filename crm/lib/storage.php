@@ -2701,17 +2701,73 @@ function crm_find_lead_by_pilot_status_message_id(string $messageId): ?array
         return null;
     }
 
-    $stmt = crm_db()->prepare(
-        'SELECT *
-        FROM leads
-        WHERE notes LIKE :message_marker
-        ORDER BY updated_at DESC
-        LIMIT 1'
-    );
-    $stmt->execute(['message_marker' => '%Pilot Status ID: ' . $messageId . '%']);
-    $lead = $stmt->fetch();
+    $matches = crm_find_whatsapp_message_identifier_matches([$messageId]);
 
-    return is_array($lead) ? $lead : null;
+    return count($matches) === 1 ? ($matches[0]['lead'] ?? null) : null;
+}
+
+/**
+ * Finds exact outgoing CRM message records for provider IDs. Repeated IDs on
+ * one record count once; matches on separate records remain ambiguous.
+ *
+ * @return list<array{lead:array,block_index:int,matching_ids:list<string>}>
+ */
+function crm_find_whatsapp_message_identifier_matches(array $messageIds): array
+{
+    if (!function_exists('crm_whatsapp_link_note_blocks')
+        || !function_exists('crm_whatsapp_note_message_identifiers')
+        || !function_exists('crm_whatsapp_note_is_outgoing_message')) {
+        return [];
+    }
+
+    $messageIds = crm_whatsapp_unique_message_identifiers($messageIds);
+
+    if ($messageIds === []) {
+        return [];
+    }
+
+    $matches = [];
+    $conditions = [];
+    $params = [];
+
+    foreach ($messageIds as $index => $messageId) {
+        $placeholder = ':message_marker_' . $index;
+        $conditions[] = 'notes LIKE ' . $placeholder;
+        $params['message_marker_' . $index] = '%' . $messageId . '%';
+    }
+
+    $stmt = crm_db()->prepare('SELECT * FROM leads WHERE ' . implode(' OR ', $conditions));
+    $stmt->execute($params);
+    $leads = $stmt->fetchAll();
+
+    foreach ($leads as $lead) {
+        if (!is_array($lead)) {
+            continue;
+        }
+
+        $leadId = (string) ($lead['id'] ?? '');
+
+        foreach (crm_whatsapp_link_note_blocks((string) ($lead['notes'] ?? '')) as $blockIndex => $block) {
+            if (!crm_whatsapp_note_is_outgoing_message($block)) {
+                continue;
+            }
+
+            $matchingIds = array_intersect($messageIds, crm_whatsapp_note_message_identifiers($block));
+
+            if ($matchingIds === []) {
+                continue;
+            }
+
+            $key = $leadId . ':' . $blockIndex;
+            $matches[$key] = [
+                'lead' => $lead,
+                'block_index' => $blockIndex,
+                'matching_ids' => crm_whatsapp_unique_message_identifiers($matchingIds),
+            ];
+        }
+    }
+
+    return array_values($matches);
 }
 
 function crm_update_lead_profile_picture(string $id, string $url): bool

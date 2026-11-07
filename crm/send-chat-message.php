@@ -209,6 +209,7 @@ $result = $hasMedia
 
 if (($result['ok'] ?? false) === true) {
     $sentMessageId = crm_whatsapp_response_message_id($result);
+    $sentMessageIds = crm_whatsapp_response_message_ids($result);
     $pilotStatusMessageId = crm_whatsapp_provider() === 'pilot_status' ? $sentMessageId : '';
     $pilotStatusQueued = crm_whatsapp_provider() === 'pilot_status';
     $storedMedia = $hasMedia
@@ -228,8 +229,14 @@ if (($result['ok'] ?? false) === true) {
         error_log('Não foi possível preservar a mídia enviada no histórico do CRM: ' . (string) ($storedMedia['error'] ?? 'erro desconhecido.'));
     }
 
-    if ($sentMessageId !== '' && is_array($mediaForHistory)) {
-        $mediaForHistory['crm_message_id'] = $sentMessageId;
+    if (is_array($mediaForHistory)) {
+        if ($sentMessageId !== '') {
+            $mediaForHistory['crm_message_id'] = $sentMessageId;
+        }
+
+        if ($sentMessageIds !== []) {
+            $mediaForHistory['message_ids'] = $sentMessageIds;
+        }
     }
 
     $sentDescription = !$hasMedia
@@ -249,10 +256,20 @@ if (($result['ok'] ?? false) === true) {
     if ($sentMessageId !== '') {
         $sentDescription .= "\nCRM message ID: " . $sentMessageId;
     }
+
+    if ($hasMedia && $mediaForHistory === null && $sentMessageIds !== []) {
+        $sentDescription .= "\nCRM message IDs: " . json_encode($sentMessageIds, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
     crm_append_lead_note(
         $leadId,
         ($hasMedia ? 'Mídia enviada via ' : 'Mensagem enviada via ') . $providerLabel . ' em ' . date('d/m/Y H:i:s') . ":\n" . $sentDescription
     );
+
+    if ($hasMedia) {
+        crm_whatsapp_resolve_pending_delivery_ids_for_lead($leadId);
+    }
+
     crm_update_whatsapp_status($leadId, $pilotStatusQueued ? 'aguardando' : 'enviado');
 
     if ((string) ($lead['first_contact_at'] ?? '') === '') {

@@ -70,58 +70,128 @@ if (!pilot_status_validate_webhook($body, $payload)) {
 }
 
 $outgoingMessages = pilot_status_extract_outgoing_messages($payload);
-$delivery = pilot_status_extract_delivery_event($payload);
-
-if ($delivery['event'] !== '' && $outgoingMessages === []) {
-    $messageId = (string) $delivery['id'];
-    $lead = $messageId !== '' ? crm_find_lead_by_pilot_status_message_id($messageId) : null;
-
-    // Official Meta status payloads identify the message with a WhatsApp
-    // wamid, while the CRM stores Pilot Status' internal message ID. When the
-    // IDs differ, the recipient lets us still update the affected conversation.
-    if ($lead === null && trim((string) ($delivery['destination'] ?? '')) !== '') {
-        $lead = crm_find_lead_by_whatsapp((string) $delivery['destination']);
-    }
-
-    if ($lead === null) {
-        pilot_status_log('Evento de entrega sem lead correspondente.', ['delivery' => $delivery]);
-        echo json_encode(['ok' => true, 'processed' => false, 'reason' => 'Mensagem não vinculada ao CRM.']);
-        exit;
-    }
-
-    $notes = (string) ($lead['notes'] ?? '');
-    $eventMarker = 'Pilot Status evento: ' . $delivery['event'] . ' | ID: ' . $messageId;
-
-    if (str_contains($notes, $eventMarker)) {
-        echo json_encode(['ok' => true, 'processed' => false, 'duplicate' => true]);
-        exit;
-    }
-
-    $statusMap = [
-        'message.sent' => 'enviado',
-        'message.delivered' => 'entregue',
-        'message.read' => 'lido',
-        'message.failed' => 'falhou',
-    ];
-    $status = $statusMap[$delivery['event']];
-    $statusText = match ($delivery['event']) {
-        'message.sent' => 'Pilot Status confirmou o envio ao WhatsApp.',
-        'message.delivered' => 'WhatsApp confirmou a entrega ao destinatário.',
-        'message.read' => 'WhatsApp confirmou a leitura pelo destinatário.',
-        'message.failed' => 'Pilot Status confirmou falha na entrega' . ($delivery['error'] !== '' ? ': ' . $delivery['error'] : '.'),
-    };
-
-    crm_update_whatsapp_status((string) $lead['id'], $status, $delivery['event'] === 'message.failed' ? $delivery['error'] : null);
-    crm_append_lead_note(
-        (string) $lead['id'],
-        $eventMarker . ' em ' . date('d/m/Y H:i:s') . ":\n" . $statusText
-    );
-
-    echo json_encode(['ok' => true, 'processed' => true, 'lead_id' => $lead['id'], 'status' => $status]);
-    exit;
-}
-
 $incomingMessages = pilot_status_extract_incoming_messages($payload);
+$deliveryEvents = pilot_status_extract_delivery_events($payload);
+
+$deliveryResults = [];
+
+if ($deliveryEvents !== []) {
+    foreach ($deliveryEvents as $delivery) {
+        $messageId = (string) ($delivery['id'] ?? '');
+        $deliveryIds = crm_whatsapp_unique_message_identifiers((array) ($delivery['ids'] ?? []));
+        $globalMessageMatches = crm_find_whatsapp_message_identifier_matches($deliveryIds);
+        $globallyAmbiguous = count($globalMessageMatches) > 1;
+        $lead = count($globalMessageMatches) === 1
+            ? ($globalMessageMatches[0]['lead'] ?? null)
+            : null;
+
+        if ($lead === null && trim((string) ($delivery['destination'] ?? '')) !== '') {
+            $lead = crm_find_lead_by_whatsapp((string) $delivery['destination']);
+        }
+
+        if ($lead === null) {
+            if ($globallyAmbiguous && $deliveryIds !== []) {
+                $pendingLeadIds = [];
+
+                foreach ($globalMessageMatches as $match) {
+                    $candidateLeadId = (string) ($match['lead']['id'] ?? '');
+
+                    if ($candidateLeadId === '' || in_array($candidateLeadId, $pendingLeadIds, true)) {
+                        continue;
+                    }
+
+                    $pendingLeadIds[] = $candidateLeadId;
+                    crm_whatsapp_link_delivery_ids_for_lead($candidateLeadId, [
+                        'event' => (string) $delivery['event'],
+                        'ids' => $deliveryIds,
+                        'destination' => (string) ($delivery['destination'] ?? ''),
+                        'globally_ambiguous' => true,
+                    ]);
+                }
+
+                $deliveryResults[] = [
+                    'ok' => true,
+                    'processed' => false,
+                    'pending' => $pendingLeadIds !== [],
+                    'ambiguous' => true,
+                    'event' => (string) $delivery['event'],
+                    'reason' => 'IDs correspondem a mais de uma mensagem do CRM.',
+                ];
+                continue;
+            }
+
+            pilot_status_log('Evento de entrega sem lead correspondente.', ['delivery' => $delivery]);
+            $deliveryResults[] = [
+                'ok' => true,
+                'processed' => false,
+                'event' => (string) $delivery['event'],
+                'reason' => 'Mensagem não vinculada ao CRM.',
+            ];
+            continue;
+        }
+
+        $notes = (string) ($lead['notes'] ?? '');
+        $eventMarker = 'Pilot Status evento: ' . $delivery['event'] . ' | ID: ' . ($messageId !== '' ? $messageId : 'sem ID');
+        $duplicatePattern = '/(?:^|\\R)' . preg_quote($eventMarker, '/') . '(?:\\s|$)/u';
+
+        if ($messageId !== '' && preg_match($duplicatePattern, $notes) === 1) {
+            $deliveryResults[] = [
+                'ok' => true,
+                'processed' => false,
+                'duplicate' => true,
+                'lead_id' => $lead['id'],
+                'event' => (string) $delivery['event'],
+            ];
+            continue;
+        }
+
+        $statusMap = [
+            'message.sent' => 'enviado',
+            'message.delivered' => 'entregue',
+            'message.read' => 'lido',
+            'message.failed' => 'falhou',
+        ];
+        $status = $statusMap[$delivery['event']] ?? 'enviado';
+        $statusText = match ($delivery['event']) {
+            'message.sent' => 'Pilot Status confirmou o envio ao WhatsApp.',
+            'message.delivered' => 'WhatsApp confirmou a entrega ao destinatário.',
+            'message.read' => 'WhatsApp confirmou a leitura pelo destinatário.',
+            'message.failed' => 'Pilot Status confirmou falha na entrega' . ($delivery['error'] !== '' ? ': ' . $delivery['error'] : '.'),
+        };
+
+        $linkResult = crm_whatsapp_link_delivery_ids_for_lead((string) $lead['id'], [
+            'event' => (string) $delivery['event'],
+            'ids' => $deliveryIds,
+            'destination' => (string) ($delivery['destination'] ?? ''),
+            'globally_ambiguous' => $globallyAmbiguous,
+        ]);
+
+        crm_update_whatsapp_status((string) $lead['id'], $status, $delivery['event'] === 'message.failed' ? $delivery['error'] : null);
+        $statusNote = $eventMarker . ' em ' . date('d/m/Y H:i:s') . ":\n" . $statusText;
+
+        if ($deliveryIds !== []) {
+            $statusNote .= "\nCRM message IDs: " . json_encode($deliveryIds, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+
+        crm_append_lead_note((string) $lead['id'], $statusNote);
+
+        $deliveryResults[] = [
+            'ok' => true,
+            'processed' => true,
+            'lead_id' => $lead['id'],
+            'status' => $status,
+            'linked' => (bool) ($linkResult['linked'] ?? false),
+            'pending' => (bool) ($linkResult['pending'] ?? false),
+            'ambiguous' => (bool) ($linkResult['ambiguous'] ?? false),
+        ];
+    }
+
+    if ($outgoingMessages === [] && $incomingMessages === []) {
+        http_response_code(200);
+        echo json_encode(['ok' => true, 'processed' => count($deliveryResults), 'results' => $deliveryResults]);
+        exit;
+    }
+}
 
 if ($incomingMessages === [] && $outgoingMessages === []) {
     pilot_status_log('Webhook sem mensagem recebida processável.', ['payload' => $payload]);
@@ -133,7 +203,7 @@ if ($incomingMessages === [] && $outgoingMessages === []) {
     exit;
 }
 
-$results = [];
+$results = $deliveryResults;
 
 foreach ($incomingMessages as $incoming) {
     $whatsapp = (string) ($incoming['number'] ?? '');
@@ -142,6 +212,11 @@ foreach ($incomingMessages as $incoming) {
     $mediaUrl = trim((string) ($media['url'] ?? ''));
     $incomingMessageId = trim((string) ($incoming['id'] ?? ''));
     $incomingMediaId = trim((string) ($media['id'] ?? ''));
+    $incomingAt = crm_whatsapp_format_provider_timestamp((string) ($incoming['timestamp'] ?? ''));
+
+    if ($incomingAt === '') {
+        $incomingAt = date('d/m/Y H:i:s');
+    }
     $replyContext = is_array($incoming['reply_context'] ?? null) ? $incoming['reply_context'] : [];
     $name = trim((string) ($incoming['name'] ?? ''));
     $profilePictureUrl = crm_normalize_profile_picture_url((string) ($incoming['profile_picture_url'] ?? ''));
@@ -276,7 +351,7 @@ foreach ($incomingMessages as $incoming) {
             if (is_string($mediaJson) && $mediaJson !== '') {
                 crm_append_lead_note(
                     (string) $lead['id'],
-                    'Mídia recebida pela Pilot Status em ' . date('d/m/Y H:i:s') . ":\n[crm_media]" . $mediaJson
+                    'Mídia recebida pela Pilot Status em ' . $incomingAt . ":\n[crm_media]" . $mediaJson
                 );
 
                 if (($leadResult['created'] ?? false) === false) {
@@ -290,7 +365,7 @@ foreach ($incomingMessages as $incoming) {
             }
         } elseif (($leadResult['created'] ?? false) === false && $message !== '') {
             $followupAutomation = crm_stop_followup_after_incoming_reply((string) $lead['id']);
-            $incomingNote = 'Mensagem recebida pela Pilot Status em ' . date('d/m/Y H:i:s') . ":\n" . $message;
+            $incomingNote = 'Mensagem recebida pela Pilot Status em ' . $incomingAt . ":\n" . $message;
             $incomingNote .= crm_whatsapp_reply_context_note($replyContext);
             crm_append_lead_note(
                 (string) $lead['id'],
@@ -440,6 +515,7 @@ foreach ($outgoingMessages as $outgoing) {
         }
 
         crm_append_lead_note((string) $lead['id'], $note);
+        crm_whatsapp_resolve_pending_delivery_ids_for_lead((string) $lead['id']);
         crm_update_whatsapp_status((string) $lead['id'], 'enviado');
 
         $results[] = [
