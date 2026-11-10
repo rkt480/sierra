@@ -14,7 +14,7 @@ header('Content-Type: text/csv; charset=utf-8');
 header('Content-Disposition: attachment; filename="leads-publi-ai.csv"');
 
 $output = fopen('php://output', 'w');
-fputcsv($output, ['Nome', 'WhatsApp', 'CPF', 'Lead Score', 'Temperatura', 'Respostas do formulário', 'Status', 'Tags', 'Observações', 'Recebido em']);
+fputcsv($output, ['Nome', 'E-mail', 'WhatsApp', 'CPF', 'Lead Score', 'Temperatura', 'Respostas do formulário', 'Status', 'Tags', 'Observações', 'Recebido em']);
 
 foreach ($leads as $lead) {
     $answers = array_map(
@@ -24,6 +24,7 @@ foreach ($leads as $lead) {
 
     fputcsv($output, [
         $lead['name'] ?? '',
+        $lead['email'] ?? '',
         $lead['whatsapp'] ?? '',
         crm_format_cpf((string) ($lead['cpf'] ?? '')),
         $lead['lead_score'] ?? '',
