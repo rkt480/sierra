@@ -146,7 +146,10 @@ function crm_whatsapp_link_note_blocks(string $notes): array
     }
 
     $recordStart = crm_whatsapp_note_record_start_pattern();
-    $groups = preg_split('/(?:\R){2,}(?=^' . $recordStart . ')/mu', $notes) ?: [];
+    // A blank line inside a known message belongs to its body. Older notes
+    // may have lost the blank separator between records, so split at the
+    // next known record header even when it follows a single newline.
+    $groups = preg_split('/(?=^' . $recordStart . ')/mu', $notes) ?: [];
     $blocks = [];
 
     foreach ($groups as $group) {
@@ -156,18 +159,18 @@ function crm_whatsapp_link_note_blocks(string $notes): array
             continue;
         }
 
-        if (preg_match('/^Resposta automática fora do horário enviada via /iu', $group) === 1) {
+        if (preg_match('/^' . $recordStart . '/u', $group) === 1) {
             $blocks[] = $group;
             continue;
         }
 
+        // Preserve the old separator for free-form CRM notes, which have no
+        // record header to distinguish one note from the next.
         foreach (preg_split('/(?:\R){2,}/u', $group) ?: [] as $legacyGroup) {
-            foreach (preg_split('/(?=^' . $recordStart . ')/mu', trim($legacyGroup)) ?: [] as $block) {
-                $block = trim($block);
+            $block = trim($legacyGroup);
 
-                if ($block !== '') {
-                    $blocks[] = $block;
-                }
+            if ($block !== '') {
+                $blocks[] = $block;
             }
         }
     }

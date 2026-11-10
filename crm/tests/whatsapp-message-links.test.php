@@ -28,6 +28,23 @@ function test_media_note(string $id, string $url = '/crm/whatsapp-media/test.jpg
         . "\n[crm_media]" . $json . "\nLegenda da imagem\nCRM message ID: " . $id;
 }
 
+$paragraph = "Primeiro parágrafo\n\nSegundo parágrafo";
+$messageNote = "Mensagem enviada via Meta Cloud API em 10/11/2026 10:00:\n" . $paragraph
+    . "\nCRM message ID: message-1";
+$templateNote = "Template \"teste\" enviado via Meta Cloud API em 10/11/2026 10:01:\n" . $paragraph
+    . "\nCRM message ID: template-1";
+$consecutiveNotes = $messageNote . "\n\n" . $templateNote
+    . "\nMensagem recebida pela Meta Cloud API em 10/11/2026 10:02:\nResposta";
+$paragraphBlocks = crm_whatsapp_link_note_blocks($consecutiveNotes);
+test_assert(count($paragraphBlocks) === 3, 'separa registros consecutivos sem dividir os parágrafos');
+test_assert($paragraphBlocks[0] === $messageNote, 'mantém a mensagem inteira em um bloco');
+test_assert($paragraphBlocks[1] === $templateNote, 'mantém o template inteiro em um bloco');
+test_assert(str_contains($paragraphBlocks[2], 'Resposta'), 'preserva o registro seguinte');
+test_assert(
+    crm_whatsapp_link_note_blocks($messageNote . "\n" . $templateNote) === [$messageNote, $templateNote],
+    'separa registros legados mesmo sem linha em branco entre eles'
+);
+
 $reply = meta_whatsapp_extract_reply_context([
     'id' => 'incoming-message-1',
     'context' => ['id' => 'wamid.original-image'],
