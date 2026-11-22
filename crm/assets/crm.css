@@ -6941,5 +6941,6 @@ textarea:focus {
 .wa-reply-preview { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 10px; border-left: 3px solid #25d366; background: #eef8f2; border-radius: 5px; }
 .wa-reply-preview[hidden] { display: none; }
 .wa-reply-preview span { display: flex; flex-direction: column; min-width: 0; }
+.whatsapp-crm-page .wa-reply-preview [data-wa-reply-author] { font-size: 14px; font-weight: 400; line-height: 1.35; }
 .wa-reply-preview small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wa-reply-preview button { border: 0; background: transparent; font-size: 22px; cursor: pointer; }
