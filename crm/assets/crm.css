@@ -6935,3 +6935,11 @@ textarea:focus {
     touch-action: pan-y;
   }
 }
+.wa-reply-menu { position: fixed; z-index: 10000; padding: 10px 16px; border: 1px solid #d9e3df; border-radius: 8px; background: #fff; color: #174b3a; box-shadow: 0 5px 20px #0002; cursor: pointer; }
+.wa-reply-menu[hidden] { display: none; }
+.wa-reply-menu:disabled { color: #697874; cursor: not-allowed; }
+.wa-reply-preview { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 10px; border-left: 3px solid #25d366; background: #eef8f2; border-radius: 5px; }
+.wa-reply-preview[hidden] { display: none; }
+.wa-reply-preview span { display: flex; flex-direction: column; min-width: 0; }
+.wa-reply-preview small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wa-reply-preview button { border: 0; background: transparent; font-size: 22px; cursor: pointer; }

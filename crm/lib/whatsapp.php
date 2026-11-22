@@ -205,13 +205,13 @@ function crm_whatsapp_send_after_hours_reply(
     }
 }
 
-function crm_whatsapp_send_text(string $number, string $text, bool $usePresence = true): array
+function crm_whatsapp_send_text(string $number, string $text, bool $usePresence = true, string $replyToMessageId = ''): array
 {
     if (crm_whatsapp_provider() === 'meta_cloud') {
-        return meta_whatsapp_send_text($number, $text);
+        return meta_whatsapp_send_text($number, $text, $replyToMessageId);
     }
 
-    return pilot_status_send_text($number, $text);
+    return pilot_status_send_text($number, $text, $replyToMessageId);
 }
 
 function crm_whatsapp_send_media(
@@ -220,13 +220,14 @@ function crm_whatsapp_send_media(
     string $mimeType,
     string $mediaType,
     string $caption = '',
-    string $fileName = ''
+    string $fileName = '',
+    string $replyToMessageId = ''
 ): array {
     if (crm_whatsapp_provider() === 'meta_cloud') {
-        return meta_whatsapp_send_media($number, $filePath, $mimeType, $mediaType, $caption, $fileName);
+        return meta_whatsapp_send_media($number, $filePath, $mimeType, $mediaType, $caption, $fileName, $replyToMessageId);
     }
 
-    return pilot_status_send_media($number, $filePath, $mimeType, $mediaType, $caption, $fileName);
+    return pilot_status_send_media($number, $filePath, $mimeType, $mediaType, $caption, $fileName, $replyToMessageId);
 }
 
 function crm_whatsapp_send_followup(array $queueItem): array

@@ -297,6 +297,13 @@ foreach ($incomingMessages as $incoming) {
     try {
         $leadResult = crm_create_lead_once($leadPayload);
         $lead = $leadResult['lead'];
+        $incomingIds = crm_whatsapp_unique_message_identifiers([
+            $incomingMessageId,
+            ...((array) ($incoming['message_ids'] ?? [])),
+        ]);
+        if (($leadResult['created'] ?? false) === true && $mediaUrl === '' && $incomingIds !== []) {
+            crm_append_lead_note((string) $lead['id'], 'CRM mensagem inicial IDs:' . "\nCRM message IDs: " . json_encode($incomingIds, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . crm_whatsapp_reply_context_note($replyContext));
+        }
         $followupAutomation = ['stopped' => false, 'cancelled' => 0];
 
         if (($leadResult['created'] ?? false) === false) {
@@ -341,6 +348,7 @@ foreach ($incomingMessages as $incoming) {
             if ($incomingMessageId !== '') {
                 $media['crm_message_id'] = $incomingMessageId;
             }
+            $media['message_ids'] = $incomingIds;
 
             if ($replyContext !== []) {
                 $media['reply_context'] = $replyContext;
@@ -366,6 +374,9 @@ foreach ($incomingMessages as $incoming) {
         } elseif (($leadResult['created'] ?? false) === false && $message !== '') {
             $followupAutomation = crm_stop_followup_after_incoming_reply((string) $lead['id']);
             $incomingNote = 'Mensagem recebida pela Pilot Status em ' . $incomingAt . ":\n" . $message;
+            if ($incomingIds !== []) {
+                $incomingNote .= "\nCRM message IDs: " . json_encode($incomingIds, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            }
             $incomingNote .= crm_whatsapp_reply_context_note($replyContext);
             crm_append_lead_note(
                 (string) $lead['id'],

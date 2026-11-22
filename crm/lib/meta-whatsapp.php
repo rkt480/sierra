@@ -304,7 +304,15 @@ function meta_whatsapp_upload_media(string $filePath, string $mimeType): array
     return ['ok' => true, 'response' => $decoded];
 }
 
-function meta_whatsapp_send_text(string $number, string $text): array
+function meta_whatsapp_with_reply_context(array $payload, string $replyToMessageId): array
+{
+    if ($replyToMessageId !== '') {
+        $payload['context'] = ['message_id' => $replyToMessageId];
+    }
+    return $payload;
+}
+
+function meta_whatsapp_send_text(string $number, string $text, string $replyToMessageId = ''): array
 {
     $settings = meta_whatsapp_settings();
     $phoneNumberId = trim((string) $settings['phone_number_id']);
@@ -318,7 +326,7 @@ function meta_whatsapp_send_text(string $number, string $text): array
         return ['ok' => false, 'error' => 'WhatsApp inválido.'];
     }
 
-    return meta_whatsapp_request($phoneNumberId . '/messages', [
+    $payload = [
         'messaging_product' => 'whatsapp',
         'recipient_type' => 'individual',
         'to' => $to,
@@ -327,7 +335,8 @@ function meta_whatsapp_send_text(string $number, string $text): array
             'preview_url' => false,
             'body' => $text,
         ],
-    ]);
+    ];
+    return meta_whatsapp_request($phoneNumberId . '/messages', meta_whatsapp_with_reply_context($payload, $replyToMessageId));
 }
 
 function meta_whatsapp_send_template(string $number, array $template, array $variables = []): array
@@ -380,7 +389,8 @@ function meta_whatsapp_send_media(
     string $mimeType,
     string $mediaType,
     string $caption = '',
-    string $fileName = ''
+    string $fileName = '',
+    string $replyToMessageId = ''
 ): array {
     $settings = meta_whatsapp_settings();
     $to = crm_normalize_whatsapp_number($number);
@@ -416,13 +426,14 @@ function meta_whatsapp_send_media(
         }
     }
 
-    return meta_whatsapp_request($settings['phone_number_id'] . '/messages', [
+    $payload = [
         'messaging_product' => 'whatsapp',
         'recipient_type' => 'individual',
         'to' => $to,
         'type' => $mediaType,
         $mediaType => $mediaPayload,
-    ]);
+    ];
+    return meta_whatsapp_request($settings['phone_number_id'] . '/messages', meta_whatsapp_with_reply_context($payload, $replyToMessageId));
 }
 
 function meta_whatsapp_render_custom_message(string $message, array $lead): string
@@ -532,7 +543,14 @@ function meta_whatsapp_message_text(array $message, bool $appOriginated = false)
     }
 
     if (!$appOriginated) {
-        return '';
+        return match ($type) {
+            'image' => 'Imagem recebida',
+            'audio' => 'Áudio recebido',
+            'video' => 'Vídeo recebido',
+            'document' => 'Documento recebido',
+            'sticker' => 'Sticker recebido',
+            default => '',
+        };
     }
 
     return match ($type) {

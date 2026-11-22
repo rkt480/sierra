@@ -41,7 +41,7 @@ crm_require_login();
           $messageMediaType = in_array($messageMediaType, ['image', 'sticker', 'audio', 'video', 'document'], true) ? $messageMediaType : 'file';
           $messageDomId = whatsapp_page_message_dom_id($message);
         ?>
-        <article<?= $messageDomId !== '' ? ' id="' . htmlspecialchars($messageDomId, ENT_QUOTES, 'UTF-8') . '"' : '' ?> class="wa-message wa-message-<?= htmlspecialchars((string) $message['direction']) ?>">
+        <article<?= $messageDomId !== '' ? ' id="' . htmlspecialchars($messageDomId, ENT_QUOTES, 'UTF-8') . '"' : '' ?> class="wa-message wa-message-<?= htmlspecialchars((string) $message['direction']) ?>" data-wa-reply-id="<?= htmlspecialchars((string) (whatsapp_page_message_id_candidates($message)[0] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-wa-reply-author="<?= htmlspecialchars(whatsapp_page_reply_context_label($message), ENT_QUOTES, 'UTF-8') ?>" data-wa-reply-preview="<?= htmlspecialchars(whatsapp_page_reply_context_preview($message), ENT_QUOTES, 'UTF-8') ?>">
           <?php if (is_array($message['reply_to'] ?? null)): ?>
             <?= whatsapp_page_quoted_message_markup($message['reply_to']) ?>
           <?php endif; ?>
@@ -113,6 +113,7 @@ crm_require_login();
         <input type="hidden" name="lead_id" value="<?= htmlspecialchars((string) ($activeLead['id'] ?? '')) ?>" />
         <input type="hidden" name="provider_filter" value="<?= htmlspecialchars($providerFilter) ?>" />
         <div class="wa-composer-main">
+              <div class="wa-reply-preview" data-wa-reply-preview hidden><span><strong data-wa-reply-author></strong><small data-wa-reply-text></small></span><button type="button" data-wa-reply-cancel aria-label="Cancelar resposta" title="Cancelar resposta">×</button></div>
           <div class="wa-media-preview" data-wa-preview hidden></div>
           <div class="wa-recording-preview" data-wa-recording-preview hidden aria-live="polite">
             <button class="wa-recording-discard" type="button" title="Descartar gravação" aria-label="Descartar gravação" data-wa-record-discard>

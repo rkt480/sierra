@@ -142,6 +142,27 @@ foreach (crm_whatsapp_link_note_blocks($bothLinked['notes']) as $block) {
 $resolvedQuote = crm_whatsapp_find_unique_message_by_id($quotedMessages, $firstWamid);
 test_assert(($resolvedQuote['media']['url'] ?? '') === '/crm/whatsapp-media/first.webp', 'a citação da primeira imagem nunca exibe a segunda');
 
+$replyLead = ['notes' => 'CRM mensagem inicial IDs:' . "\nCRM message IDs: " . json_encode(['wamid.@/:=first'])
+    . "\n\nMensagem enviada via Pilot Status em 07/11/2026 10:30:00:\nOlá\nCRM message ID: pilot/second@id"];
+test_assert(crm_whatsapp_reply_id_belongs_to_lead($replyLead, 'wamid.@/:=first'), 'aceita ID opaco da primeira mensagem');
+test_assert(crm_whatsapp_reply_id_belongs_to_lead($replyLead, 'pilot/second@id'), 'aceita ID opaco de mensagem enviada');
+test_assert(!crm_whatsapp_reply_id_belongs_to_lead($replyLead, 'WAMID.@/:=first'), 'compara ID exato');
+test_assert(!crm_whatsapp_reply_id_belongs_to_lead($replyLead, 'pilot/second@id' . "\n"), 'rejeita controle');
+test_assert(!crm_whatsapp_reply_id_belongs_to_lead($replyLead, str_repeat('a', 513)), 'limita tamanho do ID');
+
+foreach (['text' => ['text' => ['body' => 'Olá']], 'image' => ['image' => ['id' => 'asset']]] as $mode => $payload) {
+    test_assert(meta_whatsapp_with_reply_context($payload, '') === $payload, "Meta $mode comum sem campo novo");
+    test_assert(meta_whatsapp_with_reply_context($payload, 'wamid.@/:=')['context'] === ['message_id' => 'wamid.@/:='], "Meta $mode com contexto");
+}
+foreach (['text' => ['text' => 'Olá'], 'media' => ['media' => 'https://example.com/a.jpg', 'mediaType' => 'image']] as $mode => $payload) {
+    test_assert(pilot_status_with_reply_id($payload, '') === $payload, "Pilot $mode comum sem campo novo");
+    $replyPayload = pilot_status_with_reply_id($payload, 'internal/@:=');
+    test_assert($replyPayload['replyToMessageId'] === 'internal/@:=', "Pilot $mode com referência");
+    if ($mode === 'media') {
+        test_assert(!array_key_exists('text', $replyPayload), 'mídia Pilot permanece no modo media');
+    }
+}
+
 $responseIds = crm_whatsapp_response_message_ids([
     'ok' => true,
     'response' => [

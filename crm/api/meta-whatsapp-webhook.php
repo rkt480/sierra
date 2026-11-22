@@ -138,6 +138,10 @@ foreach ($incomingMessages as $incoming) {
     try {
         $leadResult = crm_create_lead_once($leadPayload);
         $lead = $leadResult['lead'];
+        $incomingIds = crm_whatsapp_unique_message_identifiers([(string) ($incoming['id'] ?? '')]);
+        if (($leadResult['created'] ?? false) === true && $incomingIds !== []) {
+            crm_append_lead_note((string) $lead['id'], 'CRM mensagem inicial IDs:' . "\nCRM message IDs: " . json_encode($incomingIds, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . crm_whatsapp_reply_context_note($replyContext));
+        }
         $followupAutomation = ($leadResult['created'] ?? false) === false
             ? crm_stop_followup_after_incoming_reply((string) $lead['id'])
             : ['stopped' => false, 'cancelled' => 0];
@@ -148,6 +152,9 @@ foreach ($incomingMessages as $incoming) {
 
         if (($leadResult['created'] ?? false) === false && $message !== '') {
             $incomingNote = 'Mensagem recebida pela Meta Cloud API em ' . date('d/m/Y H:i') . ":\n" . $message;
+            if ($incomingIds !== []) {
+                $incomingNote .= "\nCRM message IDs: " . json_encode($incomingIds, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            }
             $incomingNote .= crm_whatsapp_reply_context_note($replyContext);
             crm_append_lead_note(
                 (string) $lead['id'],
@@ -295,6 +302,7 @@ foreach ($coexistenceMessages as $outgoing) {
         if ($messageId !== '') {
             $note .= "\nCRM message ID: " . $messageId;
         }
+        $note .= crm_whatsapp_reply_context_note(is_array($outgoing['reply_context'] ?? null) ? $outgoing['reply_context'] : []);
 
         crm_append_lead_note((string) $lead['id'], $note);
         crm_update_whatsapp_status((string) $lead['id'], 'enviado');

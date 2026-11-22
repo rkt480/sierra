@@ -717,7 +717,15 @@ function pilot_status_extract_delivery_event(array $payload): array
         ?? ['event' => '', 'id' => '', 'ids' => [], 'destination' => '', 'error' => '', 'timestamp' => ''];
 }
 
-function pilot_status_send_text(string $number, string $text): array
+function pilot_status_with_reply_id(array $payload, string $replyToMessageId): array
+{
+    if ($replyToMessageId !== '') {
+        $payload['replyToMessageId'] = $replyToMessageId;
+    }
+    return $payload;
+}
+
+function pilot_status_send_text(string $number, string $text, string $replyToMessageId = ''): array
 {
     $to = pilot_status_normalize_destination_number($number);
 
@@ -725,10 +733,11 @@ function pilot_status_send_text(string $number, string $text): array
         return ['ok' => false, 'error' => 'WhatsApp inválido.'];
     }
 
-    return pilot_status_request('/messages/send', [
+    $payload = [
         'destinationNumber' => $to,
         'text' => $text,
-    ]);
+    ];
+    return pilot_status_request('/messages/send', pilot_status_with_reply_id($payload, $replyToMessageId));
 }
 
 function pilot_status_normalize_destination_number(string $number): string
@@ -1086,7 +1095,8 @@ function pilot_status_send_media(
     string $mimeType,
     string $mediaType,
     string $caption = '',
-    string $fileName = ''
+    string $fileName = '',
+    string $replyToMessageId = ''
 ): array {
     $to = pilot_status_normalize_destination_number($number);
 
@@ -1128,6 +1138,7 @@ function pilot_status_send_media(
     if ($mediaType !== 'audio' && trim($caption) !== '') {
         $payload['caption'] = trim($caption);
     }
+    $payload = pilot_status_with_reply_id($payload, $replyToMessageId);
 
     $result = pilot_status_request('/messages/send', $payload, 60);
 
@@ -1730,6 +1741,7 @@ function pilot_status_extract_single_incoming_message(array $payload): array
 
     return [
         'id' => pilot_status_first_payload_value($payload, [['id'], ['messageId'], ['message_id'], ['key', 'id'], ['message', 'id'], ['data', 'id'], ['data', 'messageId'], ['data', 'message_id'], ['data', 'key', 'id'], ['data', 'message', 'id'], ['payload', 'id'], ['payload', 'key', 'id'], ['payload', 'message', 'id']]),
+        'message_ids' => crm_whatsapp_collect_message_identifiers($payload),
         'timestamp' => pilot_status_first_payload_value($payload, [['timestamp'], ['messageTimestamp'], ['message_timestamp'], ['message', 'timestamp'], ['data', 'timestamp'], ['data', 'messageTimestamp'], ['data', 'message_timestamp'], ['data', 'message', 'timestamp'], ['data', 'message', 'messageTimestamp']]),
         'raw_number' => $phone['raw'],
         'number' => $phone['number'],

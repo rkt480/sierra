@@ -51,6 +51,12 @@ if ($lead === null) {
     exit;
 }
 
+$replyToMessageId = (string) ($_POST['reply_to_message_id'] ?? '');
+if (array_key_exists('reply_to_message_id', $_POST) && !crm_whatsapp_reply_id_belongs_to_lead($lead, $replyToMessageId)) {
+    header('Location: ' . $redirect . '&send_error=' . rawurlencode('A mensagem citada não pertence a esta conversa ou não tem ID válido. Selecione-a novamente.'));
+    exit;
+}
+
 if (crm_whatsapp_provider() === 'meta_cloud' && !crm_whatsapp_is_in_24h_window($lead)) {
     header('Location: ' . $redirect . '&send_error=' . rawurlencode('A janela de 24 horas está encerrada. Envie um template aprovado pela Meta.'));
     exit;
@@ -204,8 +210,8 @@ if ($hasMedia) {
 }
 
 $result = $hasMedia
-    ? crm_whatsapp_send_media($number, $mediaPath, $mimeType, $mediaType, $messageWithSender, $fileName)
-    : crm_whatsapp_send_text($number, $messageWithSender, false);
+    ? crm_whatsapp_send_media($number, $mediaPath, $mimeType, $mediaType, $messageWithSender, $fileName, $replyToMessageId)
+    : crm_whatsapp_send_text($number, $messageWithSender, false, $replyToMessageId);
 
 if (($result['ok'] ?? false) === true) {
     $sentMessageId = crm_whatsapp_response_message_id($result);
@@ -230,6 +236,9 @@ if (($result['ok'] ?? false) === true) {
     }
 
     if (is_array($mediaForHistory)) {
+        if ($replyToMessageId !== '') {
+            $mediaForHistory['reply_context'] = ['id' => $replyToMessageId];
+        }
         if ($sentMessageId !== '') {
             $mediaForHistory['crm_message_id'] = $sentMessageId;
         }
@@ -249,6 +258,7 @@ if (($result['ok'] ?? false) === true) {
         ? "\nStatus inicial: aceito pela Pilot Status; aguardando confirmação de entrega."
         : "\nStatus: aceito pela API.";
 
+
     if ($pilotStatusMessageId !== '') {
         $sentDescription .= "\nPilot Status ID: " . $pilotStatusMessageId;
     }
@@ -259,6 +269,9 @@ if (($result['ok'] ?? false) === true) {
 
     if ($hasMedia && $mediaForHistory === null && $sentMessageIds !== []) {
         $sentDescription .= "\nCRM message IDs: " . json_encode($sentMessageIds, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+    if ($replyToMessageId !== '' && (!$hasMedia || $mediaForHistory === null)) {
+        $sentDescription .= crm_whatsapp_reply_context_note(['id' => $replyToMessageId]);
     }
 
     crm_append_lead_note(

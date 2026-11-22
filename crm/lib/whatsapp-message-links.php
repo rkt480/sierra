@@ -26,7 +26,8 @@ function crm_whatsapp_collect_message_identifiers(mixed $value, int $depth = 0, 
     $multipleIdKeys = ['ids', 'messageids', 'crmmessageids', 'messageidentifiers'];
     $ignoredBranches = [
         'account', 'attachment', 'contact', 'contacts', 'destination', 'error', 'errors',
-        'file', 'media', 'phone', 'profile', 'recipient', 'user',
+        'context', 'contextinfo', 'file', 'media', 'phone', 'profile', 'quotedmessage',
+        'recipient', 'replyto', 'user',
     ];
     $ids = [];
 
@@ -56,7 +57,7 @@ function crm_whatsapp_collect_message_identifiers(mixed $value, int $depth = 0, 
             }
         }
 
-        if (is_array($child)) {
+        if (is_array($child) && !in_array($normalizedKey, ['context', 'contextinfo', 'quotedmessage', 'replyto'], true)) {
             $childAllowsGenericId = $allowGenericId
                 && !in_array($normalizedKey, $ignoredBranches, true)
                 && $normalizedKey !== 'metadata';
@@ -131,9 +132,38 @@ function crm_whatsapp_find_unique_message_by_id(array $messages, string $message
     return count($matches) === 1 ? $matches[0] : null;
 }
 
+function crm_whatsapp_valid_reply_id(string $id): bool
+{
+    return $id !== '' && strlen($id) <= 512 && preg_match('/[\x00-\x1F\x7F]/', $id) !== 1;
+}
+
+/** Resolve an exact provider ID only inside this lead's recorded messages. */
+function crm_whatsapp_reply_id_belongs_to_lead(array $lead, string $id): bool
+{
+    if (!crm_whatsapp_valid_reply_id($id)) {
+        return false;
+    }
+
+    $matches = 0;
+    foreach (crm_whatsapp_link_note_blocks((string) ($lead['notes'] ?? '')) as $block) {
+        if (preg_match('/^CRM mensagem inicial IDs:/u', $block) === 1) {
+            $ids = crm_whatsapp_note_message_identifiers($block);
+        } elseif (preg_match('/^(?:Mensagem recebida|Mídia recebida|Mensagem enviada|Mídia enviada|Template [^\r\n]+ enviado|Resposta automática fora do horário enviada)/u', $block) === 1
+            || (str_starts_with($block, 'Observação do CRM') && str_contains($block, 'CRM message ID:'))) {
+            $ids = crm_whatsapp_note_message_identifiers($block);
+        } else {
+            continue;
+        }
+        if (in_array($id, $ids, true)) {
+            $matches++;
+        }
+    }
+    return $matches === 1;
+}
+
 function crm_whatsapp_note_record_start_pattern(): string
 {
-    return '(?:Resposta automática fora do horário enviada via|Observação do CRM em|Mensagem recebida pelo provedor anterior|Mensagem recebida pela Meta Cloud API|Mensagem recebida pela Pilot Status|Mídia recebida pela Pilot Status|Mídia enviada (?:via|pelo)|Mensagem enviada (?:via|pelo)|Template .+ enviado via|Falha ao enviar via|Pilot Status evento:|Pilot Status IDs pendentes:)';
+    return '(?:CRM mensagem inicial IDs:|Resposta automática fora do horário enviada via|Observação do CRM em|Mensagem recebida pelo provedor anterior|Mensagem recebida pela Meta Cloud API|Mensagem recebida pela Pilot Status|Mídia recebida pela Pilot Status|Mídia enviada (?:via|pelo)|Mensagem enviada (?:via|pelo)|Template .+ enviado via|Falha ao enviar via|Pilot Status evento:|Pilot Status IDs pendentes:)';
 }
 
 /** @return list<string> */
